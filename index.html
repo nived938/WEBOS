@@ -7,6 +7,44 @@
     <meta name="description" content="A complete, polished, interactive browser-based operating system inspired by the elegance and fluid animations of macOS." />
     <meta name="theme-color" content="#090817" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238b5cf6'><path d='M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5L12 0Z'/></svg>" />
+    <script>
+      // Defensive guard for React Fast Refresh runtime
+      (function() {
+        var _reg = window.$RefreshReg$ || function() {};
+        var _sig = window.$RefreshSig$ || function() { return function(type) { return type; }; };
+        Object.defineProperty(window, '$RefreshReg$', {
+          configurable: true,
+          get: function() {
+            return function(type, id) {
+              try {
+                if (typeof _reg === 'function') _reg(type, id);
+              } catch (e) {
+                // Prevent Fast Refresh runtime failure from crashing application startup
+              }
+            };
+          },
+          set: function(val) {
+            _reg = val;
+          }
+        });
+        Object.defineProperty(window, '$RefreshSig$', {
+          configurable: true,
+          get: function() {
+            return function() {
+              try {
+                if (typeof _sig === 'function') return _sig();
+              } catch (e) {
+                return function(type) { return type; };
+              }
+              return function(type) { return type; };
+            };
+          },
+          set: function(val) {
+            _sig = val;
+          }
+        });
+      })();
+    </script>
   </head>
   <body class="bg-neutral-950 overflow-hidden select-none">
     <div id="root"></div>
