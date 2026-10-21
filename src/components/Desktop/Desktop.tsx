@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useFileSystem } from '@/core/filesystem/FileSystemContext'
 import { useSettings } from '@/core/settings/SettingsContext'
 import { useWindowManager } from '@/core/windowManager/WindowContext'
+import { useNotifications } from '@/core/notifications/NotificationContext'
 import { WALLPAPERS } from '@/core/settings/wallpapers'
 import { DesktopIcon } from './DesktopIcon'
 import { SelectionBox } from './SelectionBox'
@@ -26,6 +27,7 @@ export const Desktop: React.FC = () => {
     exportFile,
   } = useFileSystem()
   const { settings, updateSettings } = useSettings()
+  const { addNotification } = useNotifications()
   const {
     windows,
     openApp,
@@ -123,21 +125,46 @@ export const Desktop: React.FC = () => {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
   }, [closeActiveWindow, minimizeActiveWindow, toggleMaximizeActiveWindow])
 
-  // Compute Wallpaper Style
-  const wallpaperStyle = useMemo(() => {
+  // Compute Wallpaper Style & Fallbacks
+  const activeWallpaper = useMemo(() => {
+    return WALLPAPERS.find((w) => w.id === settings.wallpaperId) || WALLPAPERS[0]
+  }, [settings.wallpaperId])
+
+  const [customImageError, setCustomImageError] = useState(false)
+
+  // Validate custom wallpaper image
+  useEffect(() => {
     if (settings.customWallpaperUrl) {
+      const img = new Image()
+      img.onload = () => setCustomImageError(false)
+      img.onerror = () => {
+        setCustomImageError(true)
+        addNotification('Wallpaper Notice', 'Could not load custom wallpaper. Using default wallpaper.', 'settings')
+      }
+      img.src = settings.customWallpaperUrl
+    } else {
+      setCustomImageError(false)
+    }
+  }, [settings.customWallpaperUrl, addNotification])
+
+  const wallpaperStyle = useMemo<React.CSSProperties>(() => {
+    if (settings.customWallpaperUrl && !customImageError) {
       return {
+        backgroundColor: activeWallpaper.fallbackColor || '#090919',
         backgroundImage: `url(${settings.customWallpaperUrl})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
       }
     }
-    const wp = WALLPAPERS.find((w) => w.id === settings.wallpaperId) || WALLPAPERS[0]
     return {
-      background: wp.style,
+      backgroundColor: activeWallpaper.fallbackColor || '#090919',
+      backgroundImage: activeWallpaper.style,
       backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
     }
-  }, [settings.wallpaperId, settings.customWallpaperUrl])
+  }, [settings.customWallpaperUrl, customImageError, activeWallpaper])
 
   // Desktop Pointer Events for Marquee Selection
   const handleDesktopPointerDown = (e: React.PointerEvent) => {

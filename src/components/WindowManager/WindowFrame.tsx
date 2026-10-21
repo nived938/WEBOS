@@ -57,6 +57,12 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ windowState }) => {
     if (e.button !== 0) return // Left click only
     if (windowState.isMaximized) return // Maximize locks drag until restored
 
+    // Never initiate dragging if clicking on window controls or interactive elements
+    const target = e.target as HTMLElement
+    if (target.closest('button, [data-window-controls], input, select, textarea')) {
+      return
+    }
+
     focusWindow(windowState.id)
     setIsDragging(true)
 
@@ -67,7 +73,11 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ windowState }) => {
       winY: windowState.y,
     }
 
-    e.currentTarget.setPointerCapture(e.pointerId)
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      // Ignore pointer capture error
+    }
   }
 
   const handleTitleBarPointerMove = (e: React.PointerEvent) => {
@@ -222,7 +232,11 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ windowState }) => {
           onPointerDown={handleTitleBarPointerDown}
           onPointerMove={handleTitleBarPointerMove}
           onPointerUp={handleTitleBarPointerUp}
-          onDoubleClick={() => toggleMaximize(windowState.id)}
+          onDoubleClick={(e) => {
+            const target = e.target as HTMLElement
+            if (target.closest('button, [data-window-controls]')) return
+            toggleMaximize(windowState.id)
+          }}
           className={`h-10 flex items-center justify-between px-2 bg-neutral-900/80 backdrop-blur-2xl border-b border-white/10 cursor-default shrink-0 select-none ${
             windowState.isFocused ? 'text-white' : 'text-neutral-400'
           }`}

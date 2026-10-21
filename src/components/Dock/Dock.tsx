@@ -19,10 +19,12 @@ import {
   AppWindow,
   Gamepad2,
   Trash2,
+  LayoutGrid,
 } from 'lucide-react'
 
 const DOCK_APP_IDS: AppId[] = [
   'finder',
+  'applibrary',
   'browser',
   'mail',
   'calendar',
@@ -36,8 +38,9 @@ const DOCK_APP_IDS: AppId[] = [
   'games',
 ]
 
-const APP_ICONS: Record<AppId, React.ComponentType<{ size: number; className?: string }>> = {
+const APP_ICONS: Partial<Record<AppId, React.ComponentType<{ size: number; className?: string }>>> = {
   finder: Folder,
+  applibrary: LayoutGrid,
   browser: Globe,
   mail: Mail,
   calendar: Calendar,

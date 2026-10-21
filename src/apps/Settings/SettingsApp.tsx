@@ -21,6 +21,9 @@ import {
   Check,
   Monitor,
   Laptop,
+  Upload,
+  Trash2,
+  Eye,
 } from 'lucide-react'
 
 export const SettingsApp: React.FC<AppInstanceProps> = () => {
@@ -31,6 +34,31 @@ export const SettingsApp: React.FC<AppInstanceProps> = () => {
   const [activeSection, setActiveSection] = useState<
     'appearance' | 'wallpaper' | 'dock' | 'sound' | 'notifications' | 'storage' | 'about'
   >('appearance')
+  const [wallpaperFilter, setWallpaperFilter] = useState<'all' | 'dynamic' | 'gradient'>('all')
+
+  const handleUploadCustomWallpaper = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      addNotification('Invalid Format', 'Please upload a PNG, JPG, WebP, or SVG image.', 'settings')
+      return
+    }
+    if (file.size > 2.5 * 1024 * 1024) {
+      addNotification('File Exceeds Limit', 'Image should be under 2.5MB to ensure fast desktop rendering.', 'settings')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      updateSettings({
+        wallpaperId: 'custom',
+        customWallpaperUrl: dataUrl,
+      })
+      soundService.playClick()
+      addNotification('Wallpaper Updated', `Set custom wallpaper from "${file.name}"`, 'settings')
+    }
+    reader.readAsDataURL(file)
+  }
 
   const [showResetModal, setShowResetModal] = useState(false)
 
@@ -229,32 +257,124 @@ export const SettingsApp: React.FC<AppInstanceProps> = () => {
         {/* Wallpaper Section */}
         {activeSection === 'wallpaper' && (
           <div className="space-y-6 max-w-xl">
-            <div>
-              <h3 className="text-base font-bold text-white mb-1">Desktop Wallpaper</h3>
-              <p className="text-neutral-400 text-xs">Choose from built-in high dynamic range wallpapers.</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-white mb-1">Desktop Wallpaper</h3>
+                <p className="text-neutral-400 text-xs">Choose from built-in high dynamic range wallpapers or upload your own.</p>
+              </div>
+              <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium cursor-pointer transition shadow-md shadow-blue-600/20">
+                <Upload size={13} />
+                <span>Upload Custom</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  onChange={handleUploadCustomWallpaper}
+                  className="hidden"
+                />
+              </label>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {WALLPAPERS.map((wp) => (
-                <div
-                  key={wp.id}
+            {/* Live Desktop Preview */}
+            <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/20 shadow-2xl p-3 flex flex-col justify-between select-none">
+              <div
+                className="absolute inset-0 -z-10"
+                style={{
+                  backgroundColor: '#090919',
+                  backgroundImage: settings.customWallpaperUrl
+                    ? `url(${settings.customWallpaperUrl})`
+                    : (WALLPAPERS.find((w) => w.id === settings.wallpaperId) || WALLPAPERS[0]).style,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
+              />
+              {/* Mini Menu Bar */}
+              <div className="h-4 bg-black/40 backdrop-blur-md rounded-md flex items-center justify-between px-2 text-[9px] text-white/80">
+                <span>NOVA OS</span>
+                <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              {/* Mini Window Preview */}
+              <div className="self-center w-48 h-20 bg-neutral-900/85 border border-white/20 rounded-lg shadow-lg flex flex-col overflow-hidden">
+                <div className="h-3 bg-neutral-800 flex items-center px-1.5 gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  <span className="text-[7px] text-neutral-400 ml-2">Preview</span>
+                </div>
+                <div className="p-2 text-[8px] text-neutral-400">Desktop Preview</div>
+              </div>
+              {/* Mini Dock */}
+              <div className="self-center h-5 px-3 bg-black/50 backdrop-blur-lg border border-white/20 rounded-lg flex items-center gap-1.5">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="w-3 h-3 rounded bg-white/20" />
+                ))}
+              </div>
+            </div>
+
+            {settings.customWallpaperUrl && (
+              <div className="flex items-center justify-between p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                  <span className="text-blue-200">Custom user wallpaper is currently active</span>
+                </div>
+                <button
                   onClick={() => {
                     soundService.playClick()
-                    updateSettings({ wallpaperId: wp.id, customWallpaperUrl: undefined })
+                    updateSettings({ wallpaperId: 'nova-aurora', customWallpaperUrl: undefined })
+                    addNotification('Wallpaper Reset', 'Reverted to built-in Nova Aurora theme.', 'settings')
                   }}
-                  className={`group relative aspect-video rounded-xl overflow-hidden cursor-pointer border transition shadow-md ${
-                    settings.wallpaperId === wp.id
-                      ? 'border-blue-500 ring-2 ring-blue-500'
-                      : 'border-white/10 hover:border-white/30'
-                  }`}
-                  style={{ background: wp.thumbnail }}
+                  className="flex items-center gap-1 text-red-400 hover:text-red-300 font-medium text-[11px]"
                 >
-                  <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-between">
-                    <span className="text-[11px] text-white font-medium">{wp.name}</span>
-                    {settings.wallpaperId === wp.id && <Check size={14} className="text-blue-400 font-bold" />}
-                  </div>
-                </div>
+                  <Trash2 size={12} />
+                  <span>Remove Custom</span>
+                </button>
+              </div>
+            )}
+
+            {/* Category Filter Tabs */}
+            <div className="flex gap-1 p-1 bg-black/30 rounded-xl border border-white/10 w-fit text-xs">
+              {(['all', 'dynamic', 'gradient'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => {
+                    soundService.playClick()
+                    setWallpaperFilter(tab)
+                  }}
+                  className={`px-3 py-1 rounded-lg capitalize transition font-medium ${
+                    wallpaperFilter === tab
+                      ? 'bg-white/15 text-white shadow-sm'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  {tab}
+                </button>
               ))}
+            </div>
+
+            {/* Wallpapers Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {WALLPAPERS.filter((wp) => wallpaperFilter === 'all' || wp.type === wallpaperFilter).map((wp) => {
+                const isSelected = settings.wallpaperId === wp.id && !settings.customWallpaperUrl
+                return (
+                  <div
+                    key={wp.id}
+                    onClick={() => {
+                      soundService.playClick()
+                      updateSettings({ wallpaperId: wp.id, customWallpaperUrl: undefined })
+                    }}
+                    className={`group relative aspect-video rounded-xl overflow-hidden cursor-pointer border transition-all duration-200 shadow-md ${
+                      isSelected
+                        ? 'border-blue-500 ring-2 ring-blue-500 scale-[1.02]'
+                        : 'border-white/10 hover:border-white/30 hover:scale-[1.01]'
+                    }`}
+                    style={{ background: wp.thumbnail }}
+                  >
+                    <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/85 via-black/50 to-transparent flex items-center justify-between">
+                      <span className="text-[11px] text-white font-medium drop-shadow-sm">{wp.name}</span>
+                      {isSelected && <Check size={14} className="text-blue-400 font-bold" />}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
