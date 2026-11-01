@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use or reference NOVA OS in your research or project, please cite it as below."
+authors:
+  - family-names: "NOVA OS Contributors"
+    given-names: "Core Team"
+title: "NOVA OS: Advanced Web-Based Operating System Desktop Environment"
+version: 2.5.0
+date-released: 2026-10-20
+url: "https://github.com/nived938/WEBOS"
+license: MIT

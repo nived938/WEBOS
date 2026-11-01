@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useWindowManager } from '@/core/windowManager/WindowContext'
 import { useFileSystem } from '@/core/filesystem/FileSystemContext'
+import { useSettings } from '@/core/settings/SettingsContext'
 import { APPS_REGISTRY } from '@/core/appRegistry/apps.config'
 import type { AppId } from '@/types'
 import { soundService } from '@/core/audio/soundService'
@@ -13,14 +14,22 @@ import {
   Sliders,
   Globe,
   ArrowRight,
+  Lock,
+  RotateCcw,
+  Layers,
+  LayoutGrid,
+  Trash2,
+  Moon,
+  Sun,
+  Sparkles,
 } from 'lucide-react'
 
 interface SpotlightItem {
   id: string
-  type: 'app' | 'file' | 'setting' | 'calc' | 'web'
+  type: 'app' | 'file' | 'setting' | 'calc' | 'web' | 'command'
   title: string
   subtitle: string
-  icon: React.ComponentType<{ size: number; className?: string }>
+  icon: React.ComponentType<{ size?: number; className?: string }>
   action: () => void
 }
 
@@ -30,8 +39,9 @@ interface SpotlightProps {
 }
 
 export const Spotlight: React.FC<SpotlightProps> = ({ isOpen, onClose }) => {
-  const { openApp } = useWindowManager()
-  const { searchFiles } = useFileSystem()
+  const { openApp, lockSystem, rebootSystem, toggleOverview, toggleLauncher } = useWindowManager()
+  const { searchFiles, emptyTrash } = useFileSystem()
+  const { toggleTheme } = useSettings()
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -74,7 +84,105 @@ export const Spotlight: React.FC<SpotlightProps> = ({ isOpen, onClose }) => {
       }
     }
 
-    // 2. Apps search
+    // 2. System Commands
+    const commands: {
+      triggers: string[]
+      item: SpotlightItem
+    }[] = [
+      {
+        triggers: ['lock', 'lock screen', 'sleep'],
+        item: {
+          id: 'cmd-lock',
+          type: 'command',
+          title: 'Lock System Session',
+          subtitle: 'System Command • Immediate session lock',
+          icon: Lock,
+          action: () => {
+            lockSystem()
+            onClose()
+          },
+        },
+      },
+      {
+        triggers: ['restart', 'reboot'],
+        item: {
+          id: 'cmd-restart',
+          type: 'command',
+          title: 'Restart NOVA OS',
+          subtitle: 'System Command • Play boot sequence',
+          icon: RotateCcw,
+          action: () => {
+            rebootSystem()
+            onClose()
+          },
+        },
+      },
+      {
+        triggers: ['mission control', 'overview', 'multitask', 'windows'],
+        item: {
+          id: 'cmd-overview',
+          type: 'command',
+          title: 'Open Mission Control',
+          subtitle: 'System Command • Multitasking overview',
+          icon: Layers,
+          action: () => {
+            toggleOverview(true)
+            onClose()
+          },
+        },
+      },
+      {
+        triggers: ['launcher', 'launchpad', 'apps', 'grid'],
+        item: {
+          id: 'cmd-launcher',
+          type: 'command',
+          title: 'Open App Launcher',
+          subtitle: 'System Command • Fullscreen launchpad',
+          icon: LayoutGrid,
+          action: () => {
+            toggleLauncher(true)
+            onClose()
+          },
+        },
+      },
+      {
+        triggers: ['trash', 'empty trash', 'clean'],
+        item: {
+          id: 'cmd-trash',
+          type: 'command',
+          title: 'Empty Trash',
+          subtitle: 'System Command • Purge all trashed files',
+          icon: Trash2,
+          action: () => {
+            soundService.playTrashEmpty()
+            emptyTrash()
+            onClose()
+          },
+        },
+      },
+      {
+        triggers: ['theme', 'dark mode', 'light mode', 'dark', 'light'],
+        item: {
+          id: 'cmd-theme',
+          type: 'command',
+          title: 'Toggle Color Theme',
+          subtitle: 'System Command • Switch between dark and light appearance',
+          icon: Moon,
+          action: () => {
+            toggleTheme()
+            onClose()
+          },
+        },
+      },
+    ]
+
+    commands.forEach(({ triggers, item }) => {
+      if (triggers.some((t) => t.includes(q) || q.includes(t))) {
+        results.push(item)
+      }
+    })
+
+    // 3. Apps search
     Object.values(APPS_REGISTRY).forEach((app) => {
       if (
         app.title.toLowerCase().includes(q) ||

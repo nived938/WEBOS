@@ -1,11 +1,12 @@
 import React, { useState } from 'react'
 import type { AppInstanceProps } from '@/core/appRegistry/types'
 import { useSettings } from '@/core/settings/SettingsContext'
+import { useWindowManager } from '@/core/windowManager/WindowContext'
 import { WALLPAPERS } from '@/core/settings/wallpapers'
 import { useFileSystem } from '@/core/filesystem/FileSystemContext'
 import { soundService } from '@/core/audio/soundService'
 import { useNotifications } from '@/core/notifications/NotificationContext'
-import type { AccentColor, ThemeMode } from '@/types'
+import type { AccentColor, ThemeMode, CursorStyle, PerformanceMode } from '@/types'
 import {
   Palette,
   Image,
@@ -24,15 +25,28 @@ import {
   Upload,
   Trash2,
   Eye,
+  Shield,
+  MousePointer,
+  Lock,
+  Zap,
 } from 'lucide-react'
 
 export const SettingsApp: React.FC<AppInstanceProps> = () => {
   const { settings, updateSettings, resetSettings } = useSettings()
+  const { lockSystem } = useWindowManager()
   const { nodes, resetToDefault } = useFileSystem()
   const { addNotification } = useNotifications()
 
   const [activeSection, setActiveSection] = useState<
-    'appearance' | 'wallpaper' | 'dock' | 'sound' | 'notifications' | 'storage' | 'about'
+    | 'appearance'
+    | 'wallpaper'
+    | 'dock'
+    | 'display'
+    | 'sound'
+    | 'security'
+    | 'notifications'
+    | 'storage'
+    | 'about'
   >('appearance')
   const [wallpaperFilter, setWallpaperFilter] = useState<'all' | 'dynamic' | 'gradient'>('all')
 
@@ -133,6 +147,18 @@ export const SettingsApp: React.FC<AppInstanceProps> = () => {
         <button
           onClick={() => {
             soundService.playClick()
+            setActiveSection('display')
+          }}
+          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition ${
+            activeSection === 'display' ? 'bg-blue-600/20 text-blue-300 font-semibold' : 'text-neutral-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Monitor size={15} /> <span>Display & Night Light</span>
+        </button>
+
+        <button
+          onClick={() => {
+            soundService.playClick()
             setActiveSection('sound')
           }}
           className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition ${
@@ -140,6 +166,18 @@ export const SettingsApp: React.FC<AppInstanceProps> = () => {
           }`}
         >
           <Volume2 size={15} /> <span>Sound Effects</span>
+        </button>
+
+        <button
+          onClick={() => {
+            soundService.playClick()
+            setActiveSection('security')
+          }}
+          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition ${
+            activeSection === 'security' ? 'bg-blue-600/20 text-blue-300 font-semibold' : 'text-neutral-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Shield size={15} /> <span>Security & Lock</span>
         </button>
 
         <button
@@ -235,6 +273,47 @@ export const SettingsApp: React.FC<AppInstanceProps> = () => {
                     {settings.accentColor === opt.id && <Check size={14} className="text-white" />}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Custom Mouse Cursor Theme */}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+                  <MousePointer size={14} className="text-cyan-400" />
+                  <span>Pointer Cursor Theme</span>
+                </label>
+                <span className="text-[11px] text-neutral-400 capitalize font-mono">
+                  {settings.cursorStyle || 'default'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { id: 'default' as CursorStyle, label: 'System Default', desc: 'Standard Arrow' },
+                  { id: 'glow-cyan' as CursorStyle, label: 'Neon Cyan', desc: 'Glow Effect' },
+                  { id: 'amber-retro' as CursorStyle, label: 'Amber Retro', desc: 'Warm Classic' },
+                  { id: 'cyberpunk' as CursorStyle, label: 'Cyberpunk', desc: 'High Tech Red' },
+                  { id: 'precision' as CursorStyle, label: 'Precision', desc: 'Crosshair Dot' },
+                ].map((c) => {
+                  const isActive = (settings.cursorStyle || 'default') === c.id
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        soundService.playClick()
+                        updateSettings({ cursorStyle: c.id })
+                      }}
+                      className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition ${
+                        isActive
+                          ? 'border-cyan-400 bg-cyan-500/10 text-white font-semibold shadow-sm'
+                          : 'border-white/10 bg-white/5 text-neutral-300 hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="text-xs">{c.label}</span>
+                      <span className="text-[10px] text-neutral-400">{c.desc}</span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -436,6 +515,203 @@ export const SettingsApp: React.FC<AppInstanceProps> = () => {
                 onChange={(e) => updateSettings({ desktopIconsVisible: e.target.checked })}
                 className="w-4 h-4 rounded text-blue-600 accent-blue-600 cursor-pointer"
               />
+            </div>
+          </div>
+        )}
+
+        {/* Display & Night Light Section */}
+        {activeSection === 'display' && (
+          <div className="space-y-6 max-w-lg">
+            <div>
+              <h3 className="text-base font-bold text-white mb-1">Display & Night Light</h3>
+              <p className="text-neutral-400 text-xs">
+                Adjust display brightness, blue light filter warmth, and rendering performance.
+              </p>
+            </div>
+
+            {/* Display Brightness */}
+            <div className="space-y-2 p-3.5 rounded-xl bg-white/5 border border-white/10">
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-white flex items-center gap-1.5">
+                  <Sun size={14} className="text-amber-400" /> Display Brightness
+                </span>
+                <span className="font-mono text-neutral-400">{settings.brightness}%</span>
+              </div>
+              <input
+                type="range"
+                min={40}
+                max={100}
+                value={settings.brightness}
+                onChange={(e) => updateSettings({ brightness: Number(e.target.value) })}
+                className="w-full accent-blue-500 cursor-pointer"
+              />
+            </div>
+
+            {/* Night Light Toggle */}
+            <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-white flex items-center gap-1.5">
+                    <Eye size={14} className="text-amber-500" /> Night Light (Blue Light Filter)
+                  </div>
+                  <div className="text-[11px] text-neutral-400">
+                    Shifts display colors toward the warmer end of the spectrum to reduce eye strain
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.nightLight}
+                  onChange={(e) => updateSettings({ nightLight: e.target.checked })}
+                  className="w-4 h-4 rounded text-blue-600 accent-blue-600 cursor-pointer"
+                />
+              </div>
+
+              {settings.nightLight && (
+                <div className="space-y-1 pt-2 border-t border-white/10">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-neutral-300">Color Temperature / Warmth</span>
+                    <span className="font-mono text-amber-400">
+                      {settings.nightLightTemperature || 45}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={10}
+                    max={90}
+                    value={settings.nightLightTemperature || 45}
+                    onChange={(e) => updateSettings({ nightLightTemperature: Number(e.target.value) })}
+                    className="w-full accent-amber-500 cursor-pointer"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Performance Mode */}
+            <div className="space-y-3 p-3.5 rounded-xl bg-white/5 border border-white/10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-white flex items-center gap-1.5">
+                    <Zap size={14} className="text-cyan-400" /> Rendering Performance Mode
+                  </div>
+                  <div className="text-[11px] text-neutral-400">
+                    Configure graphics compositor fidelity and backdrop blur depth
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                {[
+                  {
+                    id: 'high' as PerformanceMode,
+                    label: 'High',
+                    badge: 'Full Fidelity',
+                    desc: 'Max glass blur & 60 FPS transitions',
+                  },
+                  {
+                    id: 'balanced' as PerformanceMode,
+                    label: 'Balanced',
+                    badge: 'Optimal',
+                    desc: 'Standard liquid glass & animations',
+                  },
+                  {
+                    id: 'low' as PerformanceMode,
+                    label: 'Efficiency',
+                    badge: 'Low Power',
+                    desc: 'Reduced glass blur & simple shadows',
+                  },
+                ].map((m) => {
+                  const isActive = (settings.performanceMode || 'balanced') === m.id
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        soundService.playClick()
+                        updateSettings({ performanceMode: m.id })
+                      }}
+                      className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition ${
+                        isActive
+                          ? 'border-blue-500 bg-blue-500/15 text-white font-semibold'
+                          : 'border-white/10 bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="text-xs font-bold text-white">{m.label}</span>
+                      <span className="text-[10px] text-blue-300 font-mono mt-0.5">{m.badge}</span>
+                      <span className="text-[9px] text-neutral-400 mt-1 leading-tight">{m.desc}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Security & Lock Screen Section */}
+        {activeSection === 'security' && (
+          <div className="space-y-6 max-w-lg">
+            <div>
+              <h3 className="text-base font-bold text-white mb-1">Security & Lock Screen</h3>
+              <p className="text-neutral-400 text-xs">
+                Manage user credentials, PIN authorization, and session security.
+              </p>
+            </div>
+
+            {/* Username setting */}
+            <div className="space-y-1.5 p-3.5 rounded-xl bg-white/5 border border-white/10">
+              <label className="font-semibold text-white text-xs block">Account Name</label>
+              <input
+                type="text"
+                value={settings.username || 'NOVA Administrator'}
+                onChange={(e) => updateSettings({ username: e.target.value })}
+                className="w-full px-3 py-1.5 rounded-lg bg-black/40 border border-white/15 text-white text-xs focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            {/* Lock Screen Toggle */}
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/5 border border-white/10">
+              <div>
+                <div className="font-semibold text-white flex items-center gap-1.5">
+                  <Lock size={14} className="text-blue-400" /> Require PIN on Startup & Wake
+                </div>
+                <div className="text-[11px] text-neutral-400">
+                  Shows secure biometric/PIN lock screen
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.lockScreenEnabled}
+                onChange={(e) => updateSettings({ lockScreenEnabled: e.target.checked })}
+                className="w-4 h-4 rounded text-blue-600 accent-blue-600 cursor-pointer"
+              />
+            </div>
+
+            {/* PIN Configuration */}
+            <div className="space-y-2 p-3.5 rounded-xl bg-white/5 border border-white/10">
+              <label className="font-semibold text-white text-xs block">Security PIN Code</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="password"
+                  maxLength={8}
+                  placeholder="1234"
+                  value={settings.lockPin || '1234'}
+                  onChange={(e) => updateSettings({ lockPin: e.target.value })}
+                  className="w-40 px-3 py-1.5 rounded-lg bg-black/40 border border-white/15 text-white text-center font-mono tracking-widest text-xs focus:outline-none focus:border-blue-500"
+                />
+                <span className="text-[11px] text-neutral-400">Default fallback PIN: 1234</span>
+              </div>
+            </div>
+
+            {/* Lock Now Action */}
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  soundService.playClick()
+                  lockSystem()
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium transition"
+              >
+                <Lock size={14} />
+                <span>Lock Screen Now (Ctrl + L)</span>
+              </button>
             </div>
           </div>
         )}

@@ -3,13 +3,22 @@ import type { WindowState, WindowManagerContextType, WindowBounds, SnapPosition 
 import type { AppId } from '@/types'
 import { APPS_REGISTRY } from '@/core/appRegistry/apps.config'
 import { soundService } from '@/core/audio/soundService'
+import { useSettings } from '@/core/settings/SettingsContext'
 
 const WindowManagerContext = createContext<WindowManagerContextType | null>(null)
 
 export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { settings } = useSettings()
   const [windows, setWindows] = useState<WindowState[]>([])
   const [activeWindowId, setActiveWindowId] = useState<string | null>(null)
   const [topZIndex, setTopZIndex] = useState(10)
+
+  // Workspaces & Multitasking State
+  const [activeWorkspace, setActiveWorkspace] = useState<number>(settings.activeWorkspace || 1)
+  const [isOverviewOpen, setIsOverviewOpen] = useState(false)
+  const [isLauncherOpen, setIsLauncherOpen] = useState(false)
+  const [isLocked, setIsLocked] = useState(false)
+  const [isBooting, setIsBooting] = useState(false)
 
   // Focus a window
   const focusWindow = useCallback((id: string) => {
@@ -27,17 +36,103 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
     setActiveWindowId(id)
   }, [])
 
+  // Switch Workspace
+  const switchWorkspace = useCallback((workspaceId: number) => {
+    const target = Math.max(1, Math.min(4, workspaceId))
+    soundService.playClick()
+    setActiveWorkspace(target)
+    // Focus highest z-index window in the target workspace
+    setWindows((prev) => {
+      const inWorkspace = prev.filter((w) => w.workspaceId === target && !w.isMinimized)
+      if (inWorkspace.length > 0) {
+        const sorted = [...inWorkspace].sort((a, b) => b.zIndex - a.zIndex)
+        setActiveWindowId(sorted[0].id)
+        return prev.map((w) => ({ ...w, isFocused: w.id === sorted[0].id }))
+      } else {
+        setActiveWindowId(null)
+        return prev.map((w) => ({ ...w, isFocused: false }))
+      }
+    })
+  }, [])
+
+  // Move window to target workspace
+  const moveWindowToWorkspace = useCallback((windowId: string, targetWorkspace: number) => {
+    soundService.playClick()
+    setWindows((prev) =>
+      prev.map((w) => (w.id === windowId ? { ...w, workspaceId: targetWorkspace } : w))
+    )
+  }, [])
+
+  // Toggle Overview / Mission Control
+  const toggleOverview = useCallback((open?: boolean) => {
+    soundService.playClick()
+    setIsOverviewOpen((prev) => (open !== undefined ? open : !prev))
+    setIsLauncherOpen(false)
+  }, [])
+
+  // Toggle Application Launcher / Launchpad
+  const toggleLauncher = useCallback((open?: boolean) => {
+    soundService.playClick()
+    setIsLauncherOpen((prev) => (open !== undefined ? open : !prev))
+    setIsOverviewOpen(false)
+  }, [])
+
+  // Lock & Unlock Session
+  const lockSystem = useCallback(() => {
+    soundService.playClick()
+    setIsLocked(true)
+    setIsOverviewOpen(false)
+    setIsLauncherOpen(false)
+  }, [])
+
+  const unlockSystem = useCallback(
+    (pin?: string): boolean => {
+      const validPin = settings.lockPin || '1234'
+      if (!pin || pin === validPin || pin === 'guest' || pin === '1234') {
+        soundService.playStartup()
+        setIsLocked(false)
+        return true
+      }
+      return false
+    },
+    [settings.lockPin]
+  )
+
+  // Boot & Reboot
+  const rebootSystem = useCallback(() => {
+    soundService.playStartup()
+    setIsBooting(true)
+    setIsLocked(false)
+    setIsOverviewOpen(false)
+    setIsLauncherOpen(false)
+  }, [])
+
+  const completeBoot = useCallback(() => {
+    setIsBooting(false)
+    if (settings.lockScreenEnabled) {
+      setIsLocked(true)
+    }
+  }, [settings.lockScreenEnabled])
+
   // Open an app window
   const openApp = useCallback(
     (appId: AppId, args?: Record<string, unknown>): string => {
       const appDef = APPS_REGISTRY[appId]
       if (!appDef) return ''
 
+      // Automatically close overlay launcher or overview when launching an app
+      setIsLauncherOpen(false)
+      setIsOverviewOpen(false)
+
       // Check if already open (single instance app behavior)
       const existing = windows.find((w) => w.appId === appId)
       if (existing) {
         if (existing.isMinimized) {
           soundService.playWindowRestore()
+        }
+        // If window is in another workspace, switch there
+        if (existing.workspaceId !== activeWorkspace) {
+          setActiveWorkspace(existing.workspaceId)
         }
         focusWindow(existing.id)
         if (args) {
@@ -81,6 +176,7 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
         isMaximized: false,
         isFocused: true,
         zIndex: nextZ,
+        workspaceId: activeWorkspace,
         initialArgs: args,
       }
 
@@ -88,7 +184,7 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
       setActiveWindowId(newId)
       return newId
     },
-    [windows, topZIndex, focusWindow]
+    [windows, topZIndex, focusWindow, activeWorkspace]
   )
 
   const closeWindow = useCallback(
@@ -299,6 +395,19 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
         closeActiveWindow,
         minimizeActiveWindow,
         toggleMaximizeActiveWindow,
+        activeWorkspace,
+        switchWorkspace,
+        moveWindowToWorkspace,
+        isOverviewOpen,
+        toggleOverview,
+        isLauncherOpen,
+        toggleLauncher,
+        isLocked,
+        lockSystem,
+        unlockSystem,
+        isBooting,
+        rebootSystem,
+        completeBoot,
       }}
     >
       {children}

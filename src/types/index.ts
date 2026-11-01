@@ -63,6 +63,10 @@ export type ThemeMode = 'dark' | 'light' | 'auto'
 
 export type AccentColor = 'blue' | 'purple' | 'emerald' | 'orange' | 'rose' | 'amber'
 
+export type CursorStyle = 'default' | 'glow-cyan' | 'amber-retro' | 'cyberpunk' | 'precision'
+
+export type PerformanceMode = 'high' | 'balanced' | 'low'
+
 export interface Wallpaper {
   id: string
   name: string
@@ -88,4 +92,15 @@ export interface SystemSettings {
   doNotDisturb: boolean
   wifiEnabled: boolean
   bluetoothEnabled: boolean
+  // New System Capabilities
+  cursorStyle: CursorStyle
+  performanceMode: PerformanceMode
+  nightLight: boolean
+  nightLightTemperature: number
+  lockScreenEnabled: boolean
+  lockPin: string
+  username: string
+  bootAnimation: boolean
+  activeWorkspace: number
+  uiSoundsVolume: number
 }

@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import type { SystemSettings } from '@/types'
 import { soundService } from '@/core/audio/soundService'
+import { applyCursorStyle } from '@/core/theme/cursorStyles'
 import {
   SettingsContext,
   SETTINGS_STORAGE_KEY,
   DEFAULT_SETTINGS,
   ACCENT_COLORS,
+  migrateSettings,
   useSettings,
   type SettingsContextType,
 } from './settingsStore'
@@ -17,7 +19,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const saved = localStorage.getItem(SETTINGS_STORAGE_KEY)
       if (saved) {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) }
+        return migrateSettings(JSON.parse(saved))
       }
     } catch {
       // Ignore
@@ -66,7 +68,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } else {
       root.classList.remove('reduce-motion')
     }
-  }, [settings.theme, settings.accentColor, settings.reducedMotion])
+
+    // Performance mode
+    root.classList.remove('perf-high', 'perf-balanced', 'perf-low')
+    root.classList.add(`perf-${settings.performanceMode || 'high'}`)
+
+    // Custom Cursor
+    applyCursorStyle(settings.cursorStyle || 'default')
+  }, [settings.theme, settings.accentColor, settings.reducedMotion, settings.performanceMode, settings.cursorStyle])
 
   const updateSettings = (partial: Partial<SystemSettings>) => {
     setSettings((prev) => ({ ...prev, ...partial }))

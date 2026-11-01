@@ -34,6 +34,8 @@ export const FinderApp: React.FC<AppInstanceProps> = ({ initialArgs }) => {
     createFile,
     renameNode,
     moveToTrash,
+    restoreFromTrash,
+    emptyTrash,
     importFiles,
     exportFile,
   } = useFileSystem()
@@ -255,14 +257,43 @@ export const FinderApp: React.FC<AppInstanceProps> = ({ initialArgs }) => {
             </button>
           )}
 
-          {selectedIds.size > 0 && (
-            <button
-              onClick={handleDeleteSelected}
-              className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition"
-              title="Move to Trash"
-            >
-              <Trash2 size={15} />
-            </button>
+          {currentFolderId === 'folder-trash' ? (
+            <>
+              {selectedIds.size > 0 && (
+                <button
+                  onClick={() => {
+                    soundService.playClick()
+                    selectedIds.forEach((id) => restoreFromTrash(id))
+                    setSelectedIds(new Set())
+                    addNotification('Restored', 'Restored selected files from Trash', 'finder')
+                  }}
+                  className="px-2 py-1 rounded-lg bg-emerald-600/30 text-emerald-300 hover:bg-emerald-600 hover:text-white transition text-xs font-medium"
+                >
+                  Restore
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  soundService.playTrashEmpty()
+                  emptyTrash()
+                  setSelectedIds(new Set())
+                  addNotification('Trash Emptied', 'All files removed permanently', 'finder')
+                }}
+                className="px-2 py-1 rounded-lg bg-red-600/30 text-red-300 hover:bg-red-600 hover:text-white transition text-xs font-medium"
+              >
+                Empty Trash
+              </button>
+            </>
+          ) : (
+            selectedIds.size > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition"
+                title="Move to Trash"
+              >
+                <Trash2 size={15} />
+              </button>
+            )
           )}
 
           <div className="w-px h-4 bg-white/10 mx-1" />
@@ -460,15 +491,27 @@ export const FinderApp: React.FC<AppInstanceProps> = ({ initialArgs }) => {
                 </div>
 
                 <div className="flex flex-col gap-2 pt-2">
-                  <button
-                    onClick={() => {
-                      setRenamingId(singleSelectedItem.id)
-                      setRenameValue(singleSelectedItem.name)
-                    }}
-                    className="w-full py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium"
-                  >
-                    Rename
-                  </button>
+                  {singleSelectedItem.isTrash ? (
+                    <button
+                      onClick={() => {
+                        restoreFromTrash(singleSelectedItem.id)
+                        addNotification('Restored', `Restored "${singleSelectedItem.name}"`, 'finder')
+                      }}
+                      className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium"
+                    >
+                      Restore from Trash
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setRenamingId(singleSelectedItem.id)
+                        setRenameValue(singleSelectedItem.name)
+                      }}
+                      className="w-full py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium"
+                    >
+                      Rename
+                    </button>
+                  )}
                   {singleSelectedItem.type === 'file' && (
                     <button
                       onClick={() => exportFile(singleSelectedItem.id)}
@@ -478,6 +521,17 @@ export const FinderApp: React.FC<AppInstanceProps> = ({ initialArgs }) => {
                     </button>
                   )}
                 </div>
+
+                {/* Text Content Preview */}
+                {singleSelectedItem.content && (
+                  <div className="pt-2">
+                    <span className="text-[11px] text-neutral-400 font-semibold block mb-1">Preview:</span>
+                    <div className="p-2 rounded-lg bg-black/40 border border-white/10 font-mono text-[10px] text-neutral-300 max-h-28 overflow-y-auto whitespace-pre-wrap break-all">
+                      {singleSelectedItem.content.slice(0, 300)}
+                      {singleSelectedItem.content.length > 300 && '...'}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="text-neutral-500 text-center py-10">

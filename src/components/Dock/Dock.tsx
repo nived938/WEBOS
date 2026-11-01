@@ -5,6 +5,7 @@ import { useFileSystem } from '@/core/filesystem/FileSystemContext'
 import { APPS_REGISTRY } from '@/core/appRegistry/apps.config'
 import type { AppId } from '@/types'
 import { soundService } from '@/core/audio/soundService'
+import { ContextMenu, MenuItem } from '@/components/Desktop/ContextMenu'
 import {
   Folder,
   Globe,
@@ -56,16 +57,104 @@ const APP_ICONS: Partial<Record<AppId, React.ComponentType<{ size: number; class
 }
 
 export const Dock: React.FC = () => {
-  const { windows, runningAppIds, openApp, focusWindow, minimizeWindow } = useWindowManager()
+  const { windows, runningAppIds, openApp, focusWindow, minimizeWindow, closeWindow } =
+    useWindowManager()
   const { settings } = useSettings()
-  const { getTrashNodes } = useFileSystem()
+  const { getTrashNodes, emptyTrash } = useFileSystem()
 
   const [hoveredAppId, setHoveredAppId] = useState<AppId | null>(null)
   const [mouseX, setMouseX] = useState<number | null>(null)
   const [isDockHovered, setIsDockHovered] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean
+    x: number
+    y: number
+    items: MenuItem[]
+  }>({
+    visible: false,
+    x: 0,
+    y: 0,
+    items: [],
+  })
   const dockRef = useRef<HTMLDivElement>(null)
 
   const trashCount = getTrashNodes().length
+
+  const handleAppContextMenu = (appId: AppId, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    soundService.playClick()
+
+    const openWin = windows.find((w) => w.appId === appId)
+    const appDef = APPS_REGISTRY[appId]
+    const items: MenuItem[] = []
+
+    if (openWin) {
+      items.push({
+        label: `Bring to Front`,
+        action: () => focusWindow(openWin.id),
+      })
+      if (!openWin.isMinimized) {
+        items.push({
+          label: 'Minimize',
+          action: () => minimizeWindow(openWin.id),
+        })
+      } else {
+        items.push({
+          label: 'Restore',
+          action: () => focusWindow(openWin.id),
+        })
+      }
+      items.push({ divider: true, label: '', action: () => {} })
+      items.push({
+        label: `Quit ${appDef?.title || 'App'}`,
+        danger: true,
+        action: () => closeWindow(openWin.id),
+      })
+    } else {
+      items.push({
+        label: `Open ${appDef?.title || 'App'}`,
+        action: () => openApp(appId),
+      })
+    }
+
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY - 120,
+      items,
+    })
+  }
+
+  const handleTrashContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    soundService.playClick()
+
+    const openWin = windows.find((w) => w.appId === 'trash')
+    const items: MenuItem[] = [
+      {
+        label: 'Open Trash',
+        action: () => (openWin ? focusWindow(openWin.id) : openApp('trash')),
+      },
+      {
+        label: 'Empty Trash',
+        disabled: trashCount === 0,
+        danger: true,
+        action: () => {
+          soundService.playTrashEmpty()
+          emptyTrash()
+        },
+      },
+    ]
+
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY - 80,
+      items,
+    })
+  }
 
   // Base icon size depending on settings
   const baseSize = settings.dockSize === 'small' ? 42 : settings.dockSize === 'large' ? 56 : 48
@@ -136,6 +225,7 @@ export const Dock: React.FC = () => {
             <div
               key={appId}
               onClick={() => handleAppClick(appId)}
+              onContextMenu={(e) => handleAppContextMenu(appId, e)}
               onMouseEnter={() => setHoveredAppId(appId)}
               className="relative flex flex-col items-center group cursor-pointer"
             >
@@ -179,6 +269,7 @@ export const Dock: React.FC = () => {
         {/* Trash App Icon */}
         <div
           onClick={() => handleAppClick('trash')}
+          onContextMenu={handleTrashContextMenu}
           onMouseEnter={() => setHoveredAppId('trash')}
           className="relative flex flex-col items-center group cursor-pointer"
         >
@@ -208,6 +299,16 @@ export const Dock: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Dock Right-Click Context Menu */}
+      {contextMenu.visible && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu((prev) => ({ ...prev, visible: false }))}
+        />
+      )}
     </div>
   )
 }

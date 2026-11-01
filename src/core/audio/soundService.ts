@@ -189,6 +189,28 @@ class SoundService {
     })
   }
 
+  // System alert / error tone
+  public playAlert() {
+    if (this.muted) return
+    const ctx = this.getContext()
+    if (!ctx || !this.masterGain) return
+
+    const t = ctx.currentTime
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(440, t)
+    osc.frequency.setValueAtTime(330, t + 0.08)
+
+    gain.gain.setValueAtTime(0.15, t)
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25)
+
+    osc.connect(gain)
+    gain.connect(this.masterGain)
+    osc.start(t)
+    osc.stop(t + 0.26)
+  }
+
   // Pleasant notification bell
   public playNotification() {
     if (this.muted) return

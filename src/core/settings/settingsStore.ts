@@ -18,6 +18,53 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   doNotDisturb: false,
   wifiEnabled: true,
   bluetoothEnabled: true,
+  cursorStyle: 'default',
+  performanceMode: 'high',
+  nightLight: false,
+  nightLightTemperature: 45,
+  lockScreenEnabled: true,
+  lockPin: '1234',
+  username: 'Commander Nova',
+  bootAnimation: true,
+  activeWorkspace: 1,
+  uiSoundsVolume: 0.8,
+}
+
+/**
+ * Migration helper to ensure backwards compatibility with previous versions of nova_os_settings_v2
+ */
+export function migrateSettings(savedData: unknown): SystemSettings {
+  if (!savedData || typeof savedData !== 'object') {
+    return { ...DEFAULT_SETTINGS }
+  }
+
+  const raw = savedData as Partial<SystemSettings>
+
+  return {
+    ...DEFAULT_SETTINGS,
+    ...raw,
+    // Ensure numerical boundaries
+    volume: typeof raw.volume === 'number' ? Math.max(0, Math.min(1, raw.volume)) : DEFAULT_SETTINGS.volume,
+    brightness: typeof raw.brightness === 'number' ? Math.max(30, Math.min(100, raw.brightness)) : DEFAULT_SETTINGS.brightness,
+    nightLightTemperature: typeof raw.nightLightTemperature === 'number' ? Math.max(0, Math.min(100, raw.nightLightTemperature)) : DEFAULT_SETTINGS.nightLightTemperature,
+    activeWorkspace: typeof raw.activeWorkspace === 'number' ? Math.max(1, Math.min(4, raw.activeWorkspace)) : 1,
+    // Validate string enums
+    theme: ['dark', 'light', 'auto'].includes(raw.theme as any)
+      ? raw.theme!
+      : DEFAULT_SETTINGS.theme,
+    accentColor: ['blue', 'purple', 'emerald', 'orange', 'rose', 'amber'].includes(raw.accentColor as any)
+      ? raw.accentColor!
+      : DEFAULT_SETTINGS.accentColor,
+    dockSize: ['small', 'medium', 'large'].includes(raw.dockSize as any)
+      ? raw.dockSize!
+      : DEFAULT_SETTINGS.dockSize,
+    cursorStyle: ['default', 'glow-cyan', 'amber-retro', 'cyberpunk', 'precision'].includes(raw.cursorStyle as any)
+      ? raw.cursorStyle!
+      : DEFAULT_SETTINGS.cursorStyle,
+    performanceMode: ['high', 'balanced', 'low'].includes(raw.performanceMode as any)
+      ? raw.performanceMode!
+      : DEFAULT_SETTINGS.performanceMode,
+  }
 }
 
 export const ACCENT_COLORS: Record<AccentColor, { primary: string; hover: string; subtle: string; rgb: string }> = {

@@ -9,11 +9,11 @@ import {
   Sun,
   Volume2,
   VolumeX,
-  Sliders,
-  Airplay,
   BellOff,
   Music,
   Monitor,
+  Eye,
+  Zap,
 } from 'lucide-react'
 
 interface ControlCenterProps {
@@ -30,7 +30,7 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({ isOpen, onClose })
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className="fixed top-9 right-2 z-50 w-80 bg-neutral-900/80 backdrop-blur-3xl border border-white/20 rounded-3xl p-3 shadow-[0_20px_50px_rgba(0,0,0,0.6)] text-xs text-neutral-200 select-none animate-in fade-in zoom-in-95 duration-150 space-y-3"
+      className="fixed top-9 right-2 z-50 w-84 bg-neutral-900/85 backdrop-blur-3xl border border-white/20 rounded-3xl p-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.6)] text-xs text-neutral-200 select-none animate-in fade-in zoom-in-95 duration-150 space-y-3"
     >
       {/* 2x2 Grid of Connectivity Toggles */}
       <div className="grid grid-cols-2 gap-2">
@@ -117,6 +117,63 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({ isOpen, onClose })
           <div>
             <div className="font-semibold text-white">Theme</div>
             <div className="text-[10px] text-neutral-400 capitalize">{settings.theme}</div>
+          </div>
+        </button>
+      </div>
+
+      {/* Night Light & Performance Toggles */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => {
+            soundService.playClick()
+            updateSettings({ nightLight: !settings.nightLight })
+          }}
+          className="flex items-center gap-2.5 p-2.5 rounded-2xl bg-white/10 hover:bg-white/15 transition text-left"
+        >
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+              settings.nightLight ? 'bg-amber-600 text-white' : 'bg-white/10 text-neutral-400'
+            }`}
+          >
+            <Eye size={16} />
+          </div>
+          <div>
+            <div className="font-semibold text-white">Night Light</div>
+            <div className="text-[10px] text-neutral-400">
+              {settings.nightLight ? `${settings.nightLightTemperature || 45}% Warm` : 'Off'}
+            </div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => {
+            soundService.playClick()
+            const nextMode =
+              settings.performanceMode === 'high'
+                ? 'balanced'
+                : settings.performanceMode === 'balanced'
+                ? 'low'
+                : 'high'
+            updateSettings({ performanceMode: nextMode })
+          }}
+          className="flex items-center gap-2.5 p-2.5 rounded-2xl bg-white/10 hover:bg-white/15 transition text-left"
+        >
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+              settings.performanceMode === 'high'
+                ? 'bg-emerald-600 text-white'
+                : settings.performanceMode === 'balanced'
+                ? 'bg-blue-600 text-white'
+                : 'bg-amber-600 text-white'
+            }`}
+          >
+            <Zap size={16} />
+          </div>
+          <div>
+            <div className="font-semibold text-white">Performance</div>
+            <div className="text-[10px] text-neutral-400 capitalize">
+              {settings.performanceMode || 'balanced'}
+            </div>
           </div>
         </button>
       </div>

@@ -12,6 +12,10 @@ import { MenuBar } from '@/components/MenuBar/MenuBar'
 import { Dock } from '@/components/Dock/Dock'
 import { Spotlight } from '@/components/Spotlight/Spotlight'
 import { AppSwitcher } from '@/components/WindowManager/AppSwitcher'
+import { BootScreen } from '@/components/Boot/BootScreen'
+import { LockScreen } from '@/components/LockScreen/LockScreen'
+import { MissionControl } from '@/components/WindowManager/MissionControl'
+import { AppLauncher } from '@/components/Launcher/AppLauncher'
 import { soundService } from '@/core/audio/soundService'
 import type { FSNode } from '@/core/filesystem/types'
 
@@ -34,6 +38,11 @@ export const Desktop: React.FC = () => {
     closeActiveWindow,
     minimizeActiveWindow,
     toggleMaximizeActiveWindow,
+    activeWorkspace,
+    switchWorkspace,
+    toggleOverview,
+    toggleLauncher,
+    lockSystem,
   } = useWindowManager()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -114,6 +123,39 @@ export const Desktop: React.FC = () => {
         return
       }
 
+      // Lock Screen: Ctrl + L
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
+        e.preventDefault()
+        lockSystem()
+        return
+      }
+
+      // Mission Control / Multitasking Overview: F3 or Ctrl + Up
+      if (e.key === 'F3' || (e.ctrlKey && e.key === 'ArrowUp')) {
+        e.preventDefault()
+        toggleOverview()
+        return
+      }
+
+      // App Launcher / Launchpad: F4 or Ctrl + Shift + A
+      if (e.key === 'F4' || (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a')) {
+        e.preventDefault()
+        toggleLauncher()
+        return
+      }
+
+      // Virtual Workspace Switching: Ctrl + Alt + Left/Right
+      if (e.ctrlKey && e.altKey && e.key === 'ArrowLeft') {
+        e.preventDefault()
+        switchWorkspace(Math.max(1, activeWorkspace - 1))
+        return
+      }
+      if (e.ctrlKey && e.altKey && e.key === 'ArrowRight') {
+        e.preventDefault()
+        switchWorkspace(Math.min(4, activeWorkspace + 1))
+        return
+      }
+
       // Escape: Close context menus or spotlight
       if (e.key === 'Escape') {
         setContextMenu((prev) => ({ ...prev, visible: false }))
@@ -123,7 +165,16 @@ export const Desktop: React.FC = () => {
 
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [closeActiveWindow, minimizeActiveWindow, toggleMaximizeActiveWindow])
+  }, [
+    closeActiveWindow,
+    minimizeActiveWindow,
+    toggleMaximizeActiveWindow,
+    lockSystem,
+    toggleOverview,
+    toggleLauncher,
+    switchWorkspace,
+    activeWorkspace,
+  ])
 
   // Compute Wallpaper Style & Fallbacks
   const activeWallpaper = useMemo(() => {
@@ -240,6 +291,17 @@ export const Desktop: React.FC = () => {
       },
       { divider: true, label: '', action: () => {} },
       {
+        label: 'Mission Control',
+        shortcut: 'F3',
+        action: () => toggleOverview(true),
+      },
+      {
+        label: 'App Launcher',
+        shortcut: 'Ctrl+A',
+        action: () => toggleLauncher(true),
+      },
+      { divider: true, label: '', action: () => {} },
+      {
         label: 'Open Settings...',
         action: () => openApp('settings'),
       },
@@ -247,6 +309,12 @@ export const Desktop: React.FC = () => {
         label: 'Spotlight Search',
         shortcut: 'Ctrl+Space',
         action: () => setIsSpotlightOpen(true),
+      },
+      { divider: true, label: '', action: () => {} },
+      {
+        label: 'Lock Screen',
+        shortcut: 'Ctrl+L',
+        action: () => lockSystem(),
       },
     ]
 
@@ -379,13 +447,15 @@ export const Desktop: React.FC = () => {
         />
       )}
 
-      {/* Window Management Layer */}
+      {/* Window Management Layer - Filtered by Virtual Desktop / Workspace */}
       <div className="absolute inset-0 pointer-events-none">
-        {windows.map((win) => (
-          <div key={win.id} className="pointer-events-auto">
-            <WindowFrame windowState={win} />
-          </div>
-        ))}
+        {windows
+          .filter((win) => (win.workspaceId || 1) === activeWorkspace)
+          .map((win) => (
+            <div key={win.id} className="pointer-events-auto">
+              <WindowFrame windowState={win} />
+            </div>
+          ))}
       </div>
 
       {/* Animated Bottom Dock */}
@@ -396,6 +466,29 @@ export const Desktop: React.FC = () => {
 
       {/* Alt + Tab App Switcher */}
       <AppSwitcher />
+
+      {/* Mission Control Multitasking Overview */}
+      <MissionControl />
+
+      {/* Fullscreen Application Launcher */}
+      <AppLauncher />
+
+      {/* System Lock Screen */}
+      <LockScreen />
+
+      {/* System Boot Animation */}
+      <BootScreen />
+
+      {/* Night Light Warmth Filter Overlay */}
+      {settings.nightLight && (
+        <div
+          className="pointer-events-none fixed inset-0 mix-blend-multiply z-[65] transition-opacity duration-500"
+          style={{
+            backgroundColor: 'rgb(245, 158, 11)',
+            opacity: ((settings.nightLightTemperature || 45) / 100) * 0.45,
+          }}
+        />
+      )}
 
       {/* Desktop Context Menu */}
       {contextMenu.visible && (

@@ -12,11 +12,13 @@ import {
   Volume2,
   VolumeX,
   Battery,
-  BatteryCharging,
   Search,
   Sliders,
   Bell,
   Sparkles,
+  LayoutGrid,
+  Layers,
+  Lock,
 } from 'lucide-react'
 
 interface MenuBarProps {
@@ -30,6 +32,12 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onOpenSpotlight }) => {
     closeActiveWindow,
     minimizeActiveWindow,
     toggleMaximizeActiveWindow,
+    activeWorkspace,
+    switchWorkspace,
+    toggleOverview,
+    toggleLauncher,
+    lockSystem,
+    rebootSystem,
   } = useWindowManager()
   const { settings, updateSettings } = useSettings()
   const { unreadCount, addNotification } = useNotifications()
@@ -150,6 +158,37 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onOpenSpotlight }) => {
               <div className="my-1 border-t border-white/10" />
               <button
                 onClick={() => {
+                  toggleLauncher(true)
+                  setActiveMenu(null)
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-blue-600 hover:text-white transition flex items-center justify-between"
+              >
+                <span>App Launcher</span>
+                <span className="text-[10px] text-neutral-400">Ctrl+A</span>
+              </button>
+              <button
+                onClick={() => {
+                  toggleOverview(true)
+                  setActiveMenu(null)
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-blue-600 hover:text-white transition flex items-center justify-between"
+              >
+                <span>Mission Control</span>
+                <span className="text-[10px] text-neutral-400">F3</span>
+              </button>
+              <div className="my-1 border-t border-white/10" />
+              <button
+                onClick={() => {
+                  lockSystem()
+                  setActiveMenu(null)
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-blue-600 hover:text-white transition flex items-center justify-between"
+              >
+                <span>Lock Screen</span>
+                <span className="text-[10px] text-neutral-400">Ctrl+L</span>
+              </button>
+              <button
+                onClick={() => {
                   soundService.playTrashEmpty()
                   addNotification('System Sleep', 'NOVA OS entered virtual sleep mode', 'settings')
                   setActiveMenu(null)
@@ -160,9 +199,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onOpenSpotlight }) => {
               </button>
               <button
                 onClick={() => {
-                  soundService.playStartup()
-                  addNotification('System Restarting', 'Restarting virtual system services...', 'settings')
                   setActiveMenu(null)
+                  rebootSystem()
                 }}
                 className="w-full text-left px-3 py-1.5 hover:bg-blue-600 hover:text-white transition"
               >
@@ -328,6 +366,42 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onOpenSpotlight }) => {
 
       {/* Right Section: System Controls, Clock, Battery, Notification */}
       <div className="flex items-center gap-1.5">
+        {/* Virtual Desktops / Workspaces Switcher */}
+        <div className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-white/5 border border-white/10 mr-1 text-[11px]">
+          {[1, 2, 3, 4].map((ws) => (
+            <button
+              key={ws}
+              onClick={() => switchWorkspace(ws)}
+              title={`Switch to Desktop ${ws}`}
+              className={`w-5 h-5 rounded flex items-center justify-center font-medium transition ${
+                activeWorkspace === ws
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-neutral-400 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              {ws}
+            </button>
+          ))}
+        </div>
+
+        {/* Mission Control Button */}
+        <button
+          onClick={() => toggleOverview()}
+          className="p-1 rounded hover:bg-white/10 text-neutral-300 hover:text-white transition"
+          title="Mission Control (F3)"
+        >
+          <Layers size={14} />
+        </button>
+
+        {/* App Launcher Button */}
+        <button
+          onClick={() => toggleLauncher()}
+          className="p-1 rounded hover:bg-white/10 text-neutral-300 hover:text-white transition"
+          title="App Launcher (Ctrl + A)"
+        >
+          <LayoutGrid size={14} />
+        </button>
+
         {/* Wi-Fi Indicator Button */}
         <div className="relative">
           <button
