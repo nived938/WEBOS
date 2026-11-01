@@ -3,7 +3,7 @@ import { useSettings } from '@/core/settings/SettingsContext'
 import { useWindowManager } from '@/core/windowManager/WindowContext'
 import { soundService } from '@/core/audio/soundService'
 import { useNotifications } from '@/core/notifications/NotificationContext'
-import { hashPin, generateRecoveryKey } from '@/core/security/cryptoPin'
+import { createSecurePin, generateRecoveryKey } from '@/core/security/cryptoPin'
 import { WALLPAPERS } from '@/core/settings/wallpapers'
 import type { AutoLockTimeout } from '@/types'
 import {
@@ -58,20 +58,21 @@ export const LockScreenSection: React.FC = () => {
 
     setIsHashing(true)
     try {
-      const { hash, salt } = await hashPin(newPin)
+      const pinResult = await createSecurePin(newPin)
       updateSettings({
-        pinHash: hash,
-        pinSalt: salt,
+        pinHash: pinResult.hash,
+        pinSalt: pinResult.salt,
+        recoveryKey: pinResult.recoveryKey,
         isPinSet: true,
-        lockPin: newPin,
       })
       soundService.playStartup()
       setPinMessage({ text: 'PIN secured with PBKDF2 (100,000 iterations)!', isError: false })
       setNewPin('')
       setConfirmPin('')
       addNotification('Security Updated', 'New PIN hashed and saved securely with cryptographic salt.', 'settings')
-    } catch {
-      setPinMessage({ text: 'Failed to compute cryptographic hash.', isError: true })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to secure PIN.'
+      setPinMessage({ text: message, isError: true })
     } finally {
       setIsHashing(false)
     }
