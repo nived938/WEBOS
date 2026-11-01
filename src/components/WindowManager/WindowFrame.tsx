@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import type { WindowState, SnapPosition } from '@/core/windowManager/types'
 import { useWindowManager } from '@/core/windowManager/WindowContext'
+import { useSettings } from '@/core/settings/SettingsContext'
 import { WindowControls } from './WindowControls'
 import { APPS_REGISTRY } from '@/core/appRegistry/apps.config'
 
@@ -19,6 +20,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ windowState }) => {
     updateWindowBounds,
     snapWindow,
   } = useWindowManager()
+  const { settings } = useSettings()
 
   const [isDragging, setIsDragging] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
@@ -220,11 +222,14 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ windowState }) => {
           width: `${windowState.width}px`,
           height: `${windowState.height}px`,
           zIndex: windowState.zIndex,
+          borderRadius: 'var(--glass-radius, 16px)',
+          border: 'var(--glass-border, 1px solid rgba(255, 255, 255, 0.15))',
+          boxShadow: 'var(--glass-shadow, 0 20px 50px rgba(0, 0, 0, 0.5))',
         }}
-        className={`fixed top-0 left-0 flex flex-col rounded-2xl border transition-shadow duration-200 overflow-hidden ${
+        className={`fixed top-0 left-0 flex flex-col transition-shadow duration-200 overflow-hidden ${
           windowState.isFocused
-            ? 'border-white/20 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.1)]'
-            : 'border-white/10 shadow-[0_15px_30px_-8px_rgba(0,0,0,0.4)] opacity-95'
+            ? 'ring-1 ring-white/20'
+            : 'opacity-95'
         } ${isInteracting ? 'select-none' : ''}`}
       >
         {/* Title Bar */}
@@ -237,29 +242,58 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ windowState }) => {
             if (target.closest('button, [data-window-controls]')) return
             toggleMaximize(windowState.id)
           }}
-          className={`h-10 flex items-center justify-between px-2 bg-neutral-900/80 backdrop-blur-2xl border-b border-white/10 cursor-default shrink-0 select-none ${
+          style={{
+            backdropFilter: 'var(--glass-backdrop-filter, blur(24px))',
+            WebkitBackdropFilter: 'var(--glass-backdrop-filter, blur(24px))',
+            background: 'var(--glass-bg, rgba(16, 18, 28, 0.82))',
+          }}
+          className={`${
+            settings.windowManagerSettings?.titlebarStyle === 'compact' ? 'h-8' : 'h-10'
+          } flex items-center justify-between px-2.5 border-b border-white/10 cursor-default shrink-0 select-none ${
             windowState.isFocused ? 'text-white' : 'text-neutral-400'
           }`}
         >
-          {/* Traffic Lights */}
-          <WindowControls
-            onClose={() => closeWindow(windowState.id)}
-            onMinimize={() => minimizeWindow(windowState.id)}
-            onMaximize={() => toggleMaximize(windowState.id)}
-            isMaximized={windowState.isMaximized}
-          />
+          {settings.windowManagerSettings?.titlebarStyle === 'windows' ? (
+            <>
+              {/* Windows Style: Title on Left, Controls on Right */}
+              <div className="flex items-center gap-2 text-xs font-semibold tracking-tight truncate max-w-[calc(100%-80px)]">
+                <span>{windowState.title}</span>
+              </div>
 
-          {/* Title in center */}
-          <div className="absolute inset-x-0 flex items-center justify-center pointer-events-none text-xs font-medium tracking-tight truncate px-16">
-            <span>{windowState.title}</span>
-          </div>
+              <WindowControls
+                onClose={() => closeWindow(windowState.id)}
+                onMinimize={() => minimizeWindow(windowState.id)}
+                onMaximize={() => toggleMaximize(windowState.id)}
+                isMaximized={windowState.isMaximized}
+              />
+            </>
+          ) : (
+            <>
+              {/* macOS Style: Traffic Lights on Left, Title in Center */}
+              <WindowControls
+                onClose={() => closeWindow(windowState.id)}
+                onMinimize={() => minimizeWindow(windowState.id)}
+                onMaximize={() => toggleMaximize(windowState.id)}
+                isMaximized={windowState.isMaximized}
+              />
 
-          <div className="w-12" />
+              <div className="absolute inset-x-0 flex items-center justify-center pointer-events-none text-xs font-semibold tracking-tight truncate px-16">
+                <span>{windowState.title}</span>
+              </div>
+
+              <div className="w-12" />
+            </>
+          )}
         </div>
 
         {/* Window Content Body */}
         <div
-          className={`flex-1 relative overflow-hidden bg-neutral-900/90 backdrop-blur-2xl ${
+          style={{
+            backdropFilter: 'var(--glass-backdrop-filter, blur(24px))',
+            WebkitBackdropFilter: 'var(--glass-backdrop-filter, blur(24px))',
+            background: 'var(--theme-window-bg, rgba(16, 18, 28, 0.90))',
+          }}
+          className={`flex-1 relative overflow-hidden ${
             isInteracting ? 'pointer-events-none' : ''
           }`}
         >

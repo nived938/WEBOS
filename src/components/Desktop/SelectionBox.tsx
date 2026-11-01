@@ -5,6 +5,7 @@ interface SelectionBoxProps {
   startY: number
   currentX: number
   currentY: number
+  color?: string
 }
 
 export const SelectionBox: React.FC<SelectionBoxProps> = ({
@@ -12,6 +13,7 @@ export const SelectionBox: React.FC<SelectionBoxProps> = ({
   startY,
   currentX,
   currentY,
+  color = '#3b82f6',
 }) => {
   const left = Math.min(startX, currentX)
   const top = Math.min(startY, currentY)
@@ -25,8 +27,10 @@ export const SelectionBox: React.FC<SelectionBoxProps> = ({
         top: `${top}px`,
         width: `${width}px`,
         height: `${height}px`,
+        backgroundColor: `${color}25`,
+        borderColor: `${color}88`,
       }}
-      className="fixed pointer-events-none z-20 bg-blue-500/20 border border-blue-400/60 rounded-md"
+      className="fixed pointer-events-none z-20 border rounded-md"
     />
   )
 }

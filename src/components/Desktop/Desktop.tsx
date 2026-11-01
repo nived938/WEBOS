@@ -8,6 +8,7 @@ import { WALLPAPERS } from '@/core/settings/wallpapers'
 import { DesktopIcon } from './DesktopIcon'
 import { SelectionBox } from './SelectionBox'
 import { ContextMenu, MenuItem } from './ContextMenu'
+import { DesktopWidgets } from './DesktopWidgets'
 import { WindowFrame } from '@/components/WindowManager/WindowFrame'
 import { MenuBar } from '@/components/MenuBar/MenuBar'
 import { Dock } from '@/components/Dock/Dock'
@@ -269,24 +270,59 @@ export const Desktop: React.FC = () => {
     }
   }, [settings.customWallpaperUrl, addNotification])
 
+  // Wallpaper slideshow cycle
+  useEffect(() => {
+    const ws = settings.wallpaperSettings
+    if (!ws?.slideshow || !ws?.slideshowInterval || ws.slideshowInterval <= 0) return
+
+    const pool = ws.favorites && ws.favorites.length > 0 ? ws.favorites : WALLPAPERS.map((w) => w.id)
+    if (pool.length <= 1) return
+
+    const intervalMs = ws.slideshowInterval * 60 * 1000
+    const interval = setInterval(() => {
+      const currentIndex = pool.indexOf(settings.wallpaperId)
+      const nextIndex = (currentIndex + 1) % pool.length
+      updateSettings({ wallpaperId: pool[nextIndex], customWallpaperUrl: undefined })
+    }, intervalMs)
+
+    return () => clearInterval(interval)
+  }, [settings.wallpaperSettings, settings.wallpaperId, updateSettings])
+
   const wallpaperStyle = useMemo<React.CSSProperties>(() => {
+    const pos = settings.wallpaperSettings?.position || 'fill'
+    let size = 'cover'
+    let position = 'center'
+    let repeat = 'no-repeat'
+
+    if (pos === 'fit') {
+      size = 'contain'
+    } else if (pos === 'stretch') {
+      size = '100% 100%'
+    } else if (pos === 'center') {
+      size = 'auto'
+    } else if (pos === 'tile') {
+      size = 'auto'
+      position = 'top left'
+      repeat = 'repeat'
+    }
+
     if (settings.customWallpaperUrl && !customImageError) {
       return {
         backgroundColor: activeWallpaper.fallbackColor || '#090919',
         backgroundImage: `url(${settings.customWallpaperUrl})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
+        backgroundSize: size,
+        backgroundPosition: position,
+        backgroundRepeat: repeat,
       }
     }
     return {
       backgroundColor: activeWallpaper.fallbackColor || '#090919',
       backgroundImage: activeWallpaper.style,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
+      backgroundSize: size,
+      backgroundPosition: position,
+      backgroundRepeat: repeat,
     }
-  }, [settings.customWallpaperUrl, customImageError, activeWallpaper])
+  }, [settings.customWallpaperUrl, customImageError, activeWallpaper, settings.wallpaperSettings?.position])
 
   // Desktop Pointer Events for Marquee Selection
   const handleDesktopPointerDown = (e: React.PointerEvent) => {
@@ -483,9 +519,10 @@ export const Desktop: React.FC = () => {
       {settings.desktopIconsVisible && (
         <div className="absolute inset-0 pt-8 pb-20 pointer-events-none">
           {desktopNodes.map((node, idx) => {
+            const spacing = settings.desktopSettings?.iconSpacing || 86
             const col = Math.floor(idx / 8)
             const row = idx % 8
-            const defaultPos = { x: 20 + col * 90, y: 46 + row * 82 }
+            const defaultPos = { x: 20 + col * spacing, y: 46 + row * (spacing - 4) }
             const pos = positions[node.id] || defaultPos
             const isSelected = selectedIds.has(node.id)
 
@@ -496,6 +533,8 @@ export const Desktop: React.FC = () => {
                   isSelected={isSelected}
                   x={pos.x}
                   y={pos.y}
+                  iconSize={settings.desktopSettings?.iconSize || 'medium'}
+                  labelPosition={settings.desktopSettings?.labelPosition || 'bottom'}
                   onSelect={(e) => {
                     soundService.playClick()
                     if (e.metaKey || e.ctrlKey) {
@@ -518,6 +557,9 @@ export const Desktop: React.FC = () => {
         </div>
       )}
 
+      {/* Desktop Floating Widgets */}
+      <DesktopWidgets />
+
       {/* Marquee Selection Drag Box */}
       {isMarquee && (
         <SelectionBox
@@ -525,6 +567,7 @@ export const Desktop: React.FC = () => {
           startY={marqueeStart.y}
           currentX={marqueeCurrent.x}
           currentY={marqueeCurrent.y}
+          color={settings.desktopSettings?.selectionColor || '#3b82f6'}
         />
       )}
 

@@ -1,11 +1,15 @@
 import { createContext, useContext } from 'react'
 import type { SystemSettings, AccentColor } from '@/types'
+import { DEFAULT_LIQUID_GLASS } from '@/core/theme/liquidGlass'
+import { DEFAULT_CURSOR_SETTINGS } from '@/core/theme/cursorEngine'
 
 export const SETTINGS_STORAGE_KEY = 'nova_os_settings_v2'
 
 export const DEFAULT_SETTINGS: SystemSettings = {
   theme: 'dark',
   accentColor: 'blue',
+  activeThemeId: 'nova-dark',
+  customThemes: [],
   wallpaperId: 'nova-aurora',
   dockSize: 'medium',
   dockMagnification: true,
@@ -19,6 +23,7 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   wifiEnabled: true,
   bluetoothEnabled: true,
   cursorStyle: 'default',
+  cursorSettings: DEFAULT_CURSOR_SETTINGS,
   performanceMode: 'high',
   nightLight: false,
   nightLightTemperature: 45,
@@ -41,6 +46,107 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   recoveryKey: 'NOVA-8492-7201-9482',
   autoLockTimeout: 5,
   immersiveModeEnabled: false,
+  // Extended Personalization Subsystems
+  liquidGlass: DEFAULT_LIQUID_GLASS,
+  wallpaperSettings: {
+    position: 'fill',
+    slideshow: false,
+    slideshowInterval: 0,
+    liveAnimated: true,
+    favorites: ['nova-aurora', 'deep-space', 'cosmic-purple'],
+  },
+  dockSettings: {
+    position: 'bottom',
+    appearance: 'liquid-glass',
+    iconSize: 48,
+    iconSpacing: 6,
+    magnification: true,
+    magnificationScale: 1.45,
+    animationSpeed: 1,
+    autoHide: false,
+    showRunningIndicators: true,
+    showLabels: true,
+    showOpenWindows: true,
+    recentApps: true,
+    pinnedAppIds: [
+      'finder',
+      'applibrary',
+      'browser',
+      'mail',
+      'calendar',
+      'notes',
+      'calculator',
+      'photos',
+      'music',
+      'terminal',
+      'settings',
+      'appstore',
+      'games',
+    ],
+  },
+  desktopSettings: {
+    iconSize: 'medium',
+    iconSpacing: 86,
+    labelPosition: 'bottom',
+    gridSnap: true,
+    autoArrange: true,
+    selectionColor: '#3b82f6',
+    showIcons: true,
+  },
+  desktopWidgets: [
+    {
+      id: 'widget-clock',
+      type: 'clock',
+      title: 'Cosmic Clock',
+      enabled: true,
+      x: typeof window !== 'undefined' && window.innerWidth ? Math.max(20, window.innerWidth - 300) : 1000,
+      y: 40,
+    },
+    {
+      id: 'widget-system',
+      type: 'system',
+      title: 'Neural Engine Monitor',
+      enabled: true,
+      x: typeof window !== 'undefined' && window.innerWidth ? Math.max(20, window.innerWidth - 300) : 1000,
+      y: 200,
+    },
+    {
+      id: 'widget-weather',
+      type: 'weather',
+      title: 'Orbital Weather',
+      enabled: true,
+      x: typeof window !== 'undefined' && window.innerWidth ? Math.max(20, window.innerWidth - 300) : 1000,
+      y: 350,
+    },
+  ],
+  windowManagerSettings: {
+    snapEnabled: true,
+    minimizeEffect: 'genie',
+    shadowDepth: 65,
+    titlebarStyle: 'mac',
+    doubleClickAction: 'maximize',
+  },
+  panelSettings: {
+    clockFormat: '12h',
+    showSeconds: false,
+    showBattery: true,
+    showWifi: true,
+    showSound: true,
+    showUser: true,
+    blurDepth: 24,
+  },
+  animationSettings: {
+    speed: 1,
+    windowTransitions: true,
+    dockBounce: true,
+    particleEffects: true,
+  },
+  accessibilitySettings: {
+    highContrast: false,
+    textScale: 100,
+    grayscale: false,
+    focusOutlines: false,
+  },
 }
 
 /**
@@ -87,6 +193,47 @@ export function migrateSettings(savedData: unknown): SystemSettings {
     pinHash: raw.pinHash || DEFAULT_SETTINGS.pinHash,
     pinSalt: raw.pinSalt || DEFAULT_SETTINGS.pinSalt,
     recoveryKey: raw.recoveryKey || DEFAULT_SETTINGS.recoveryKey,
+    // Ensure sub-objects merge safely
+    liquidGlass: {
+      ...DEFAULT_SETTINGS.liquidGlass,
+      ...(raw.liquidGlass || {}),
+    },
+    cursorSettings: {
+      ...DEFAULT_SETTINGS.cursorSettings,
+      ...(raw.cursorSettings || {}),
+    },
+    wallpaperSettings: {
+      ...DEFAULT_SETTINGS.wallpaperSettings,
+      ...(raw.wallpaperSettings || {}),
+    },
+    dockSettings: {
+      ...DEFAULT_SETTINGS.dockSettings,
+      ...(raw.dockSettings || {}),
+    },
+    desktopSettings: {
+      ...DEFAULT_SETTINGS.desktopSettings,
+      ...(raw.desktopSettings || {}),
+    },
+    desktopWidgets: Array.isArray(raw.desktopWidgets) && raw.desktopWidgets.length > 0
+      ? raw.desktopWidgets
+      : DEFAULT_SETTINGS.desktopWidgets,
+    windowManagerSettings: {
+      ...DEFAULT_SETTINGS.windowManagerSettings,
+      ...(raw.windowManagerSettings || {}),
+    },
+    panelSettings: {
+      ...DEFAULT_SETTINGS.panelSettings,
+      ...(raw.panelSettings || {}),
+    },
+    animationSettings: {
+      ...DEFAULT_SETTINGS.animationSettings,
+      ...(raw.animationSettings || {}),
+    },
+    accessibilitySettings: {
+      ...DEFAULT_SETTINGS.accessibilitySettings,
+      ...(raw.accessibilitySettings || {}),
+    },
+    customThemes: Array.isArray(raw.customThemes) ? raw.customThemes : [],
   }
 }
 

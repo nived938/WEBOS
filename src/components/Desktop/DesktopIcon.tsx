@@ -8,6 +8,8 @@ interface DesktopIconProps {
   isSelected: boolean
   x: number
   y: number
+  iconSize?: 'small' | 'medium' | 'large'
+  labelPosition?: 'bottom' | 'right'
   onSelect: (e: React.MouseEvent) => void
   onDoubleClick: () => void
   onContextMenu: (e: React.MouseEvent) => void
@@ -20,6 +22,8 @@ export const DesktopIcon: React.FC<DesktopIconProps> = ({
   isSelected,
   x,
   y,
+  iconSize = 'medium',
+  labelPosition = 'bottom',
   onSelect,
   onDoubleClick,
   onContextMenu,
@@ -36,26 +40,28 @@ export const DesktopIcon: React.FC<DesktopIconProps> = ({
     initY: 0,
   })
 
+  const pixelSize = iconSize === 'small' ? 30 : iconSize === 'large' ? 48 : 38
+
   const getIcon = () => {
     if (node.id === 'shortcut-drive') {
-      return <HardDrive size={38} className="text-neutral-300 drop-shadow-md" />
+      return <HardDrive size={pixelSize} className="text-neutral-300 drop-shadow-md" />
     }
     if (node.name.endsWith('.app')) {
-      return <Gamepad2 size={38} className="text-violet-400 drop-shadow-md" />
+      return <Gamepad2 size={pixelSize} className="text-violet-400 drop-shadow-md" />
     }
     if (node.type === 'folder') {
-      return <Folder size={38} className="text-blue-400 fill-blue-400/30 drop-shadow-md" />
+      return <Folder size={pixelSize} className="text-blue-400 fill-blue-400/30 drop-shadow-md" />
     }
     if (node.name.endsWith('.md') || node.name.endsWith('.txt')) {
-      return <FileText size={38} className="text-amber-400 drop-shadow-md" />
+      return <FileText size={pixelSize} className="text-amber-400 drop-shadow-md" />
     }
     if (node.mimeType?.startsWith('image/') || node.name.endsWith('.svg') || node.name.endsWith('.png') || node.name.endsWith('.jpg')) {
-      return <Image size={38} className="text-emerald-400 drop-shadow-md" />
+      return <Image size={pixelSize} className="text-emerald-400 drop-shadow-md" />
     }
     if (node.mimeType?.startsWith('audio/') || node.name.endsWith('.synth') || node.name.endsWith('.mp3')) {
-      return <Music size={38} className="text-purple-400 drop-shadow-md" />
+      return <Music size={pixelSize} className="text-purple-400 drop-shadow-md" />
     }
-    return <File size={38} className="text-neutral-300 drop-shadow-md" />
+    return <File size={pixelSize} className="text-neutral-300 drop-shadow-md" />
   }
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -120,13 +126,17 @@ export const DesktopIcon: React.FC<DesktopIconProps> = ({
         e.stopPropagation()
         onContextMenu(e)
       }}
-      className={`fixed w-20 flex flex-col items-center p-1.5 rounded-xl cursor-pointer select-none transition-shadow group ${
+      className={`fixed ${
+        labelPosition === 'right'
+          ? 'flex flex-row items-center gap-2 px-2 py-1.5 w-auto min-w-[130px] max-w-[200px]'
+          : 'flex flex-col items-center p-1.5 w-20'
+      } rounded-xl cursor-pointer select-none transition-shadow group ${
         isSelected
           ? 'bg-blue-600/30 ring-1 ring-blue-400/60 shadow-lg'
           : 'hover:bg-white/10'
       } ${isDragging ? 'z-30 cursor-grabbing opacity-90' : 'z-10'}`}
     >
-      <div className="w-11 h-11 flex items-center justify-center mb-1 group-hover:scale-105 transition transform duration-150">
+      <div className="flex items-center justify-center shrink-0 group-hover:scale-105 transition transform duration-150">
         {getIcon()}
       </div>
 

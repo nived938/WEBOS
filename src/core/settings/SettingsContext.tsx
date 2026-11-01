@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react'
 import type { SystemSettings } from '@/types'
 import { soundService } from '@/core/audio/soundService'
 import { applyCursorStyle } from '@/core/theme/cursorStyles'
+import { applyLiquidGlassCSS } from '@/core/theme/liquidGlass'
+import { BUILTIN_THEMES, applyThemeCSS } from '@/core/theme/themes'
+import { applyCursorSettings } from '@/core/theme/cursorEngine'
 import {
   SettingsContext,
   SETTINGS_STORAGE_KEY,
@@ -42,7 +45,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     soundService.setMuted(!settings.soundEffects)
   }, [settings.volume, settings.soundEffects])
 
-  // Sync dark/light theme class and CSS variables
+  // Sync Theme, Accent, Liquid Glass, Cursors and Accessibility
   useEffect(() => {
     const root = document.documentElement
     const isDark =
@@ -73,9 +76,47 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     root.classList.remove('perf-high', 'perf-balanced', 'perf-low')
     root.classList.add(`perf-${settings.performanceMode || 'high'}`)
 
-    // Custom Cursor
-    applyCursorStyle(settings.cursorStyle || 'default')
-  }, [settings.theme, settings.accentColor, settings.reducedMotion, settings.performanceMode, settings.cursorStyle])
+    // Liquid Glass Design System
+    if (settings.liquidGlass) {
+      applyLiquidGlassCSS(settings.liquidGlass)
+    }
+
+    // Active Theme Engine
+    const currentTheme =
+      settings.customThemes?.find((t) => t.id === settings.activeThemeId) ||
+      BUILTIN_THEMES.find((t) => t.id === settings.activeThemeId) ||
+      BUILTIN_THEMES[0]
+    applyThemeCSS(currentTheme)
+
+    // Cursor Engine
+    if (settings.cursorSettings) {
+      applyCursorSettings(settings.cursorSettings)
+    } else {
+      applyCursorStyle(settings.cursorStyle || 'default')
+    }
+
+    // Accessibility Controls
+    if (settings.accessibilitySettings) {
+      if (settings.accessibilitySettings.grayscale) {
+        root.style.filter = 'grayscale(100%)'
+      } else {
+        root.style.filter = 'none'
+      }
+      root.classList.toggle('high-contrast', settings.accessibilitySettings.highContrast)
+      root.style.setProperty('--text-scale', `${settings.accessibilitySettings.textScale / 100}`)
+    }
+  }, [
+    settings.theme,
+    settings.accentColor,
+    settings.reducedMotion,
+    settings.performanceMode,
+    settings.cursorStyle,
+    settings.cursorSettings,
+    settings.liquidGlass,
+    settings.activeThemeId,
+    settings.customThemes,
+    settings.accessibilitySettings,
+  ])
 
   const updateSettings = (partial: Partial<SystemSettings>) => {
     setSettings((prev) => ({ ...prev, ...partial }))
