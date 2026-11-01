@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { AppInstanceProps } from '@/core/appRegistry/types'
-import { RotateCcw, Trophy, Gem, Play, Pause, Sparkles } from 'lucide-react'
+import { RotateCcw, Trophy, Gem, Play, Pause, Sparkles, MousePointer } from 'lucide-react'
 import { soundService } from '@/core/audio/soundService'
 
 export const MarbleRunner3D: React.FC<AppInstanceProps> = () => {
@@ -11,12 +11,14 @@ export const MarbleRunner3D: React.FC<AppInstanceProps> = () => {
   const [won, setWon] = useState(false)
   const [timer, setTimer] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
+  const [isMouseLocked, setIsMouseLocked] = useState(false)
 
   const keysRef = useRef<{ [key: string]: boolean }>({})
   const stateRef = useRef({
     marblePos: new THREE.Vector3(0, 0.5, 0),
     marbleVel: new THREE.Vector3(0, 0, 0),
     platformTilt: new THREE.Vector2(0, 0),
+    mouseTilt: new THREE.Vector2(0, 0),
     gems: [] as THREE.Mesh[],
     walls: [] as { x: number; z: number; w: number; d: number }[],
     goalPos: new THREE.Vector3(7, 0.5, 7),
@@ -202,14 +204,17 @@ export const MarbleRunner3D: React.FC<AppInstanceProps> = () => {
 
       // Input tilt calculation
       const keys = keysRef.current
-      let targetTiltX = 0
-      let targetTiltZ = 0
+      let targetTiltX = stateRef.current.mouseTilt.x
+      let targetTiltZ = stateRef.current.mouseTilt.y
       const tiltSpeed = 0.28
 
       if (keys['arrowup'] || keys['w']) targetTiltX = -tiltSpeed
       if (keys['arrowdown'] || keys['s']) targetTiltX = tiltSpeed
       if (keys['arrowleft'] || keys['a']) targetTiltZ = -tiltSpeed
       if (keys['arrowright'] || keys['d']) targetTiltZ = tiltSpeed
+
+      // Decay mouse tilt slightly towards center when idle
+      stateRef.current.mouseTilt.multiplyScalar(0.98)
 
       // Smooth platform tilt lerp
       stateRef.current.platformTilt.x += (targetTiltX - stateRef.current.platformTilt.x) * 0.15
@@ -307,6 +312,30 @@ export const MarbleRunner3D: React.FC<AppInstanceProps> = () => {
 
     animate()
 
+    // Pointer lock mouse tilt control
+    const handleMouseMove = (e: MouseEvent) => {
+      if (document.pointerLockElement === container) {
+        const sens = 0.0025
+        stateRef.current.mouseTilt.x = THREE.MathUtils.clamp(
+          stateRef.current.mouseTilt.x + e.movementY * sens,
+          -0.35,
+          0.35
+        )
+        stateRef.current.mouseTilt.y = THREE.MathUtils.clamp(
+          stateRef.current.mouseTilt.y + e.movementX * sens,
+          -0.35,
+          0.35
+        )
+      }
+    }
+
+    const handlePointerLockChange = () => {
+      setIsMouseLocked(document.pointerLockElement === container)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('pointerlockchange', handlePointerLockChange)
+
     // Resize handler
     const handleResize = () => {
       if (!container) return
@@ -320,13 +349,29 @@ export const MarbleRunner3D: React.FC<AppInstanceProps> = () => {
 
     return () => {
       cancelAnimationFrame(animationFrameId)
+      window.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('pointerlockchange', handlePointerLockChange)
       window.removeEventListener('resize', handleResize)
+      if (document.pointerLockElement === container) {
+        document.exitPointerLock?.()
+      }
       renderer.dispose()
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement)
       }
     }
   }, [])
+
+  const toggleMouseCapture = () => {
+    soundService.playClick()
+    const container = mountRef.current
+    if (!container) return
+    if (document.pointerLockElement === container) {
+      document.exitPointerLock?.()
+    } else {
+      container.requestPointerLock?.()
+    }
+  }
 
   const restartGame = () => {
     soundService.playClick()
@@ -362,7 +407,20 @@ export const MarbleRunner3D: React.FC<AppInstanceProps> = () => {
           </div>
         </div>
 
-        <div className="flex items-center space-x-1 pointer-events-auto">
+        <div className="flex items-center space-x-1.5 pointer-events-auto">
+          <button
+            onClick={toggleMouseCapture}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
+              isMouseLocked
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm shadow-cyan-500/20'
+                : 'bg-neutral-900/80 hover:bg-neutral-800 text-neutral-300 border-white/10'
+            }`}
+            title="Capture mouse for 360° platform tilt control"
+          >
+            <MousePointer className="w-3.5 h-3.5 text-cyan-400" />
+            <span>{isMouseLocked ? 'Captured (ESC)' : 'Capture Mouse'}</span>
+          </button>
+
           <button
             onClick={restartGame}
             className="p-2 rounded-xl bg-neutral-900/80 hover:bg-neutral-800 text-neutral-300 border border-white/10"
@@ -374,7 +432,13 @@ export const MarbleRunner3D: React.FC<AppInstanceProps> = () => {
       </div>
 
       {/* 3D Canvas Mount */}
-      <div ref={mountRef} className="flex-1 w-full h-full relative" />
+      <div
+        ref={mountRef}
+        onClick={() => {
+          if (!isMouseLocked) toggleMouseCapture()
+        }}
+        className="flex-1 w-full h-full relative cursor-pointer"
+      />
 
       {/* Victory Overlay */}
       {won && (
@@ -397,7 +461,9 @@ export const MarbleRunner3D: React.FC<AppInstanceProps> = () => {
 
       {/* Footer Controls Tip */}
       <div className="absolute bottom-2 inset-x-0 text-center text-[10px] text-neutral-400 pointer-events-none">
-        Tilt board using Arrow Keys or WASD • Collect all 5 cyan gems and roll into green portal
+        {isMouseLocked
+          ? 'Mouse Captured • Move mouse to tilt platform 360° • Press ESC to release'
+          : 'Tilt board using Arrow Keys/WASD or click Capture Mouse for 360° tilt • Collect all 5 cyan gems'}
       </div>
     </div>
   )

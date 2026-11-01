@@ -57,7 +57,14 @@ export interface WindowManagerContextType {
   // Lock Screen & Session Management
   isLocked: boolean
   lockSystem: () => void
-  unlockSystem: (pin?: string) => boolean
+  unlockSystem: (pin?: string) => Promise<boolean>
+  // Virtual Power Management (Sleep, Restart, Power Off)
+  isAsleep: boolean
+  sleepSystem: () => void
+  wakeSystem: () => void
+  isShutDown: boolean
+  powerOffSystem: () => void
+  powerOnSystem: () => void
   // System Boot Animation Lifecycle
   isBooting: boolean
   rebootSystem: () => void

@@ -3,6 +3,7 @@ import { SettingsProvider } from '@/core/settings/SettingsContext'
 import { FileSystemProvider } from '@/core/filesystem/FileSystemContext'
 import { NotificationProvider } from '@/core/notifications/NotificationContext'
 import { WindowManagerProvider, useWindowManager } from '@/core/windowManager/WindowContext'
+import { PointerLockProvider } from '@/core/pointer/PointerLockContext'
 import { Desktop } from '@/components/Desktop/Desktop'
 import { soundService } from '@/core/audio/soundService'
 
@@ -29,9 +30,11 @@ export function App() {
     <SettingsProvider>
       <FileSystemProvider>
         <NotificationProvider>
-          <WindowManagerProvider>
-            <AppContent />
-          </WindowManagerProvider>
+          <PointerLockProvider>
+            <WindowManagerProvider>
+              <AppContent />
+            </WindowManagerProvider>
+          </PointerLockProvider>
         </NotificationProvider>
       </FileSystemProvider>
     </SettingsProvider>

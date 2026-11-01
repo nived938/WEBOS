@@ -19,6 +19,11 @@ import {
   LayoutGrid,
   Layers,
   Lock,
+  User,
+  Bot,
+  Compass,
+  Power,
+  Moon,
 } from 'lucide-react'
 
 interface MenuBarProps {
@@ -37,7 +42,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onOpenSpotlight }) => {
     toggleOverview,
     toggleLauncher,
     lockSystem,
+    sleepSystem,
     rebootSystem,
+    powerOffSystem,
   } = useWindowManager()
   const { settings, updateSettings } = useSettings()
   const { unreadCount, addNotification } = useNotifications()
@@ -49,6 +56,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onOpenSpotlight }) => {
   const [showWifiFlyout, setShowWifiFlyout] = useState(false)
   const [showVolumeFlyout, setShowVolumeFlyout] = useState(false)
   const [showBatteryFlyout, setShowBatteryFlyout] = useState(false)
+  const [showUserFlyout, setShowUserFlyout] = useState(false)
 
   const menuBarRef = useRef<HTMLDivElement>(null)
 
@@ -185,13 +193,12 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onOpenSpotlight }) => {
                 className="w-full text-left px-3 py-1.5 hover:bg-blue-600 hover:text-white transition flex items-center justify-between"
               >
                 <span>Lock Screen</span>
-                <span className="text-[10px] text-neutral-400">Ctrl+L</span>
+                <span className="text-[10px] text-neutral-400">Ctrl+Alt+L</span>
               </button>
               <button
                 onClick={() => {
-                  soundService.playTrashEmpty()
-                  addNotification('System Sleep', 'NOVA OS entered virtual sleep mode', 'settings')
                   setActiveMenu(null)
+                  sleepSystem()
                 }}
                 className="w-full text-left px-3 py-1.5 hover:bg-blue-600 hover:text-white transition"
               >
@@ -205,6 +212,16 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onOpenSpotlight }) => {
                 className="w-full text-left px-3 py-1.5 hover:bg-blue-600 hover:text-white transition"
               >
                 Restart...
+              </button>
+              <div className="my-1 border-t border-white/10" />
+              <button
+                onClick={() => {
+                  setActiveMenu(null)
+                  powerOffSystem()
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-red-600 hover:text-white text-red-300 transition"
+              >
+                Shut Down...
               </button>
             </div>
           )}
@@ -534,6 +551,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onOpenSpotlight }) => {
             setShowNotifications((n) => !n)
             setShowControlCenter(false)
             setShowWifiFlyout(false)
+            setShowUserFlyout(false)
           }}
           className={`p-1 rounded transition relative ${
             showNotifications ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-neutral-300 hover:text-white'
@@ -545,6 +563,136 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onOpenSpotlight }) => {
             <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_4px_#3b82f6]" />
           )}
         </button>
+
+        {/* User Profile Menu */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              soundService.playClick()
+              setShowUserFlyout((u) => !u)
+              setShowControlCenter(false)
+              setShowNotifications(false)
+              setShowWifiFlyout(false)
+              setShowVolumeFlyout(false)
+            }}
+            className="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-white/10 text-neutral-200 hover:text-white transition text-xs"
+            title={`User: ${settings.username || 'Commander Nova'}`}
+          >
+            <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 to-cyan-400 p-[1px] overflow-hidden flex items-center justify-center">
+              {settings.userAvatar && (settings.userAvatar.startsWith('data:image/') || settings.userAvatar.startsWith('http')) ? (
+                <img src={settings.userAvatar} alt="User" className="w-full h-full rounded-full object-cover" />
+              ) : settings.userAvatar === 'avatar-bot' ? (
+                <div className="w-full h-full bg-neutral-900 rounded-full flex items-center justify-center">
+                  <Bot size={11} className="text-cyan-300" />
+                </div>
+              ) : settings.userAvatar === 'avatar-compass' ? (
+                <div className="w-full h-full bg-neutral-900 rounded-full flex items-center justify-center">
+                  <Compass size={11} className="text-purple-300" />
+                </div>
+              ) : settings.userAvatar === 'avatar-sparkles' ? (
+                <div className="w-full h-full bg-neutral-900 rounded-full flex items-center justify-center">
+                  <Sparkles size={11} className="text-amber-300" />
+                </div>
+              ) : (
+                <div className="w-full h-full bg-neutral-900 rounded-full flex items-center justify-center">
+                  <User size={11} className="text-cyan-300" />
+                </div>
+              )}
+            </div>
+            <span className="hidden md:inline text-[11px] font-medium max-w-[90px] truncate">
+              {settings.username || 'Nova'}
+            </span>
+          </button>
+
+          {showUserFlyout && (
+            <div className="absolute top-7 right-0 w-56 bg-neutral-900/90 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl p-3 text-xs text-neutral-200 z-50 space-y-2 animate-fadeIn">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-white/10">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-cyan-400 p-[1.5px] shadow-md overflow-hidden flex items-center justify-center flex-shrink-0">
+                  {settings.userAvatar && (settings.userAvatar.startsWith('data:image/') || settings.userAvatar.startsWith('http')) ? (
+                    <img src={settings.userAvatar} alt="User" className="w-full h-full rounded-full object-cover" />
+                  ) : settings.userAvatar === 'avatar-bot' ? (
+                    <div className="w-full h-full bg-neutral-900 rounded-full flex items-center justify-center">
+                      <Bot size={18} className="text-cyan-300" />
+                    </div>
+                  ) : settings.userAvatar === 'avatar-compass' ? (
+                    <div className="w-full h-full bg-neutral-900 rounded-full flex items-center justify-center">
+                      <Compass size={18} className="text-purple-300" />
+                    </div>
+                  ) : settings.userAvatar === 'avatar-sparkles' ? (
+                    <div className="w-full h-full bg-neutral-900 rounded-full flex items-center justify-center">
+                      <Sparkles size={18} className="text-amber-300" />
+                    </div>
+                  ) : (
+                    <div className="w-full h-full bg-neutral-900 rounded-full flex items-center justify-center">
+                      <User size={18} className="text-cyan-300" />
+                    </div>
+                  )}
+                </div>
+                <div className="truncate">
+                  <div className="font-semibold text-white truncate">
+                    {settings.username || 'Commander Nova'}
+                  </div>
+                  <div className="text-[10px] text-neutral-400 truncate">
+                    {settings.userGreeting || 'Welcome back'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-0.5 pt-1">
+                <button
+                  onClick={() => {
+                    openApp('settings')
+                    setShowUserFlyout(false)
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-blue-600 hover:text-white transition text-[11px]"
+                >
+                  Profile & Security Settings...
+                </button>
+                <div className="my-1 border-t border-white/10" />
+                <button
+                  onClick={() => {
+                    setShowUserFlyout(false)
+                    lockSystem()
+                  }}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-blue-600 hover:text-white transition text-[11px]"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Lock size={12} /> Lock Screen
+                  </span>
+                  <span className="text-[10px] text-neutral-400 font-mono">Ctrl+Alt+L</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowUserFlyout(false)
+                    sleepSystem()
+                  }}
+                  className="w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-blue-600 hover:text-white transition text-[11px]"
+                >
+                  <Moon size={12} /> Sleep
+                </button>
+                <button
+                  onClick={() => {
+                    setShowUserFlyout(false)
+                    rebootSystem()
+                  }}
+                  className="w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-blue-600 hover:text-white transition text-[11px]"
+                >
+                  <Sparkles size={12} /> Restart...
+                </button>
+                <div className="my-1 border-t border-white/10" />
+                <button
+                  onClick={() => {
+                    setShowUserFlyout(false)
+                    powerOffSystem()
+                  }}
+                  className="w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-red-600 hover:text-white text-red-300 transition text-[11px]"
+                >
+                  <Power size={12} /> Shut Down...
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Live Clock & Date */}
         <button

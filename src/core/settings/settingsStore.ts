@@ -28,6 +28,19 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   bootAnimation: true,
   activeWorkspace: 1,
   uiSoundsVolume: 0.8,
+  // Advanced Lock Screen & User Profile
+  lockWallpaperId: 'nova-aurora',
+  lockWallpaperType: 'dynamic',
+  userAvatar: 'avatar-nova',
+  userBio: 'Cosmic Navigator & System Architect',
+  userGreeting: 'Welcome back to NOVA OS',
+  profileAccentColor: 'blue',
+  pinHash: 'zCmGySHLDbMjVX0mmBE7glaztl6f0OcUBD5e0Vt54bA=', // PBKDF2 hash of default PIN 1234
+  pinSalt: 'bm92YS1kZWZhdWx0LXNhbHQ=',
+  isPinSet: true,
+  recoveryKey: 'NOVA-8492-7201-9482',
+  autoLockTimeout: 5,
+  immersiveModeEnabled: false,
 }
 
 /**
@@ -48,6 +61,9 @@ export function migrateSettings(savedData: unknown): SystemSettings {
     brightness: typeof raw.brightness === 'number' ? Math.max(30, Math.min(100, raw.brightness)) : DEFAULT_SETTINGS.brightness,
     nightLightTemperature: typeof raw.nightLightTemperature === 'number' ? Math.max(0, Math.min(100, raw.nightLightTemperature)) : DEFAULT_SETTINGS.nightLightTemperature,
     activeWorkspace: typeof raw.activeWorkspace === 'number' ? Math.max(1, Math.min(4, raw.activeWorkspace)) : 1,
+    autoLockTimeout: [0, 1, 2, 5, 10, 15, 30].includes(raw.autoLockTimeout as any)
+      ? raw.autoLockTimeout!
+      : DEFAULT_SETTINGS.autoLockTimeout,
     // Validate string enums
     theme: ['dark', 'light', 'auto'].includes(raw.theme as any)
       ? raw.theme!
@@ -64,6 +80,13 @@ export function migrateSettings(savedData: unknown): SystemSettings {
     performanceMode: ['high', 'balanced', 'low'].includes(raw.performanceMode as any)
       ? raw.performanceMode!
       : DEFAULT_SETTINGS.performanceMode,
+    lockWallpaperType: ['gradient', 'dynamic', 'custom', 'animated'].includes(raw.lockWallpaperType as any)
+      ? raw.lockWallpaperType!
+      : DEFAULT_SETTINGS.lockWallpaperType,
+    // Fallback cryptographic credentials if missing
+    pinHash: raw.pinHash || DEFAULT_SETTINGS.pinHash,
+    pinSalt: raw.pinSalt || DEFAULT_SETTINGS.pinSalt,
+    recoveryKey: raw.recoveryKey || DEFAULT_SETTINGS.recoveryKey,
   }
 }
 

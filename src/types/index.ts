@@ -76,6 +76,8 @@ export interface Wallpaper {
   fallbackColor?: string
 }
 
+export type AutoLockTimeout = 0 | 1 | 2 | 5 | 10 | 15 | 30
+
 export interface SystemSettings {
   theme: ThemeMode
   accentColor: AccentColor
@@ -103,4 +105,18 @@ export interface SystemSettings {
   bootAnimation: boolean
   activeWorkspace: number
   uiSoundsVolume: number
+  // Advanced Lock Screen & User Profile
+  lockWallpaperId: string
+  customLockWallpaperUrl?: string
+  lockWallpaperType: 'gradient' | 'dynamic' | 'custom' | 'animated'
+  userAvatar: string
+  userBio: string
+  userGreeting: string
+  profileAccentColor: AccentColor
+  pinHash?: string
+  pinSalt?: string
+  isPinSet: boolean
+  recoveryKey?: string
+  autoLockTimeout: AutoLockTimeout
+  immersiveModeEnabled: boolean
 }

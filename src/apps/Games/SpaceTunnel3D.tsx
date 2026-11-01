@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { AppInstanceProps } from '@/core/appRegistry/types'
-import { RotateCcw, Zap, Shield, Flame } from 'lucide-react'
+import { RotateCcw, Zap, Shield, Flame, MousePointer } from 'lucide-react'
 import { soundService } from '@/core/audio/soundService'
 
 export const SpaceTunnel3D: React.FC<AppInstanceProps> = () => {
@@ -16,6 +16,7 @@ export const SpaceTunnel3D: React.FC<AppInstanceProps> = () => {
   })
   const [isGameOver, setIsGameOver] = useState(false)
   const [speedLevel, setSpeedLevel] = useState(1)
+  const [isMouseLocked, setIsMouseLocked] = useState(false)
 
   const keysRef = useRef<{ [k: string]: boolean }>({})
   const stateRef = useRef({
@@ -267,6 +268,32 @@ export const SpaceTunnel3D: React.FC<AppInstanceProps> = () => {
 
     animate()
 
+    // Mouse pointer lock flight control
+    const handleMouseMove = (e: MouseEvent) => {
+      if (document.pointerLockElement === container && !stateRef.current.isDead) {
+        const sens = 0.007
+        stateRef.current.playerPos.x = THREE.MathUtils.clamp(
+          stateRef.current.playerPos.x + e.movementX * sens,
+          -2.4,
+          2.4
+        )
+        stateRef.current.playerPos.y = THREE.MathUtils.clamp(
+          stateRef.current.playerPos.y - e.movementY * sens,
+          -2.4,
+          2.4
+        )
+        stateRef.current.playerVel.x = e.movementX * 0.35
+        stateRef.current.playerVel.y = -e.movementY * 0.35
+      }
+    }
+
+    const handlePointerLockChange = () => {
+      setIsMouseLocked(document.pointerLockElement === container)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('pointerlockchange', handlePointerLockChange)
+
     const handleResize = () => {
       if (!container) return
       const w = container.clientWidth
@@ -279,13 +306,29 @@ export const SpaceTunnel3D: React.FC<AppInstanceProps> = () => {
 
     return () => {
       cancelAnimationFrame(animationFrameId)
+      window.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('pointerlockchange', handlePointerLockChange)
       window.removeEventListener('resize', handleResize)
+      if (document.pointerLockElement === container) {
+        document.exitPointerLock?.()
+      }
       renderer.dispose()
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement)
       }
     }
   }, [])
+
+  const toggleMouseCapture = () => {
+    soundService.playClick()
+    const container = mountRef.current
+    if (!container) return
+    if (document.pointerLockElement === container) {
+      document.exitPointerLock?.()
+    } else {
+      container.requestPointerLock?.()
+    }
+  }
 
   const restartGame = () => {
     soundService.playClick()
@@ -328,17 +371,38 @@ export const SpaceTunnel3D: React.FC<AppInstanceProps> = () => {
           <span className="font-mono text-xs">WARP {speedLevel}</span>
         </div>
 
-        <button
-          onClick={restartGame}
-          className="p-2 rounded-xl bg-neutral-900/80 hover:bg-neutral-800 text-neutral-300 border border-white/10 pointer-events-auto"
-          title="Restart"
-        >
-          <RotateCcw className="w-4 h-4" />
-        </button>
+        <div className="flex items-center space-x-1.5 pointer-events-auto">
+          <button
+            onClick={toggleMouseCapture}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
+              isMouseLocked
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm shadow-cyan-500/20'
+                : 'bg-neutral-900/80 hover:bg-neutral-800 text-neutral-300 border-white/10'
+            }`}
+            title="Capture mouse for high-precision flight stick steering"
+          >
+            <MousePointer className="w-3.5 h-3.5 text-cyan-400" />
+            <span>{isMouseLocked ? 'Captured (ESC)' : 'Capture Mouse'}</span>
+          </button>
+
+          <button
+            onClick={restartGame}
+            className="p-2 rounded-xl bg-neutral-900/80 hover:bg-neutral-800 text-neutral-300 border border-white/10"
+            title="Restart"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* 3D Canvas Mount */}
-      <div ref={mountRef} className="flex-1 w-full h-full relative" />
+      <div
+        ref={mountRef}
+        onClick={() => {
+          if (!isMouseLocked) toggleMouseCapture()
+        }}
+        className="flex-1 w-full h-full relative cursor-pointer"
+      />
 
       {/* Game Over Screen */}
       {isGameOver && (
@@ -360,8 +424,10 @@ export const SpaceTunnel3D: React.FC<AppInstanceProps> = () => {
       )}
 
       {/* Footer Instructions */}
-      <div className="absolute bottom-2 inset-x-0 text-center text-[10px] text-neutral-500 pointer-events-none">
-        Steer Starfighter with Arrow Keys or WASD • Dodge rotating laser barriers & obstacles
+      <div className="absolute bottom-2 inset-x-0 text-center text-[10px] text-neutral-400 pointer-events-none">
+        {isMouseLocked
+          ? 'Mouse Flight Stick Active • Move mouse to steer Starfighter • Press ESC to release'
+          : 'Steer Starfighter with Arrow Keys/WASD or click Capture Mouse for flight stick • Dodge barriers'}
       </div>
     </div>
   )

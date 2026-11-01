@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { AppInstanceProps } from '@/core/appRegistry/types'
-import { RotateCcw, Box, Sun, Moon, Sparkles, Pickaxe } from 'lucide-react'
+import { RotateCcw, Box, Sun, Moon, MousePointer } from 'lucide-react'
 import { soundService } from '@/core/audio/soundService'
 
 type BlockType = 'grass' | 'dirt' | 'stone' | 'wood' | 'gold' | 'water'
@@ -20,6 +20,7 @@ export const VoxelIsland3D: React.FC<AppInstanceProps> = () => {
   const [selectedBlock, setSelectedBlock] = useState<BlockType>('grass')
   const [blockCount, setBlockCount] = useState(0)
   const [isNight, setIsNight] = useState(false)
+  const [isMouseLocked, setIsMouseLocked] = useState(false)
 
   const stateRef = useRef({
     scene: null as THREE.Scene | null,
@@ -85,13 +86,23 @@ export const VoxelIsland3D: React.FC<AppInstanceProps> = () => {
     }
     animate()
 
-    // Mouse Drag Rotation
+    // Mouse Drag & Pointer Lock Orbit Rotation
     const handleMouseDown = (e: MouseEvent) => {
       stateRef.current.isMouseDown = true
       stateRef.current.prevMousePos = { x: e.clientX, y: e.clientY }
     }
 
     const handleMouseMove = (e: MouseEvent) => {
+      if (document.pointerLockElement === container) {
+        stateRef.current.camAngle.theta -= e.movementX * 0.005
+        stateRef.current.camAngle.phi = Math.max(
+          0.1,
+          Math.min(Math.PI / 2.2, stateRef.current.camAngle.phi - e.movementY * 0.005)
+        )
+        updateCameraPosition()
+        return
+      }
+
       if (!stateRef.current.isMouseDown) return
       const dx = e.clientX - stateRef.current.prevMousePos.x
       const dy = e.clientY - stateRef.current.prevMousePos.y
@@ -107,9 +118,14 @@ export const VoxelIsland3D: React.FC<AppInstanceProps> = () => {
       stateRef.current.isMouseDown = false
     }
 
+    const handlePointerLockChange = () => {
+      setIsMouseLocked(document.pointerLockElement === container)
+    }
+
     container.addEventListener('mousedown', handleMouseDown)
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
+    document.addEventListener('pointerlockchange', handlePointerLockChange)
 
     // Resize
     const handleResize = () => {
@@ -127,7 +143,11 @@ export const VoxelIsland3D: React.FC<AppInstanceProps> = () => {
       container.removeEventListener('mousedown', handleMouseDown)
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
+      document.removeEventListener('pointerlockchange', handlePointerLockChange)
       window.removeEventListener('resize', handleResize)
+      if (document.pointerLockElement === container) {
+        document.exitPointerLock?.()
+      }
       renderer.dispose()
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement)
@@ -218,10 +238,12 @@ export const VoxelIsland3D: React.FC<AppInstanceProps> = () => {
     if (!container || !cam || !scene) return
 
     const rect = container.getBoundingClientRect()
-    const mouse = new THREE.Vector2(
-      ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      -((e.clientY - rect.top) / rect.height) * 2 + 1
-    )
+    const mouse = isMouseLocked
+      ? new THREE.Vector2(0, 0)
+      : new THREE.Vector2(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          -((e.clientY - rect.top) / rect.height) * 2 + 1
+        )
 
     const raycaster = new THREE.Raycaster()
     raycaster.setFromCamera(mouse, cam)
@@ -301,6 +323,28 @@ export const VoxelIsland3D: React.FC<AppInstanceProps> = () => {
 
         <div className="flex items-center space-x-1.5 pointer-events-auto">
           <button
+            onClick={() => {
+              soundService.playClick()
+              const container = mountRef.current
+              if (!container) return
+              if (document.pointerLockElement === container) {
+                document.exitPointerLock?.()
+              } else {
+                container.requestPointerLock?.()
+              }
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
+              isMouseLocked
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm shadow-cyan-500/20'
+                : 'bg-neutral-900/80 hover:bg-neutral-800 text-neutral-300 border-white/10'
+            }`}
+            title="Capture mouse for first-person 360° orbit and building"
+          >
+            <MousePointer className="w-3.5 h-3.5 text-cyan-400" />
+            <span>{isMouseLocked ? 'Captured (ESC)' : 'Capture Mouse'}</span>
+          </button>
+
+          <button
             onClick={toggleDayNight}
             className="p-2 rounded-xl bg-neutral-900/80 hover:bg-neutral-800 text-neutral-300 border border-white/10"
             title="Toggle Day/Night"
@@ -326,11 +370,20 @@ export const VoxelIsland3D: React.FC<AppInstanceProps> = () => {
         onPointerDown={handlePointerDown}
         onContextMenu={e => e.preventDefault()}
         className="flex-1 w-full h-full relative cursor-crosshair"
-      />
+      >
+        {/* Reticle / Crosshair Dot when pointer is locked */}
+        {isMouseLocked && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-2.5 h-2.5 rounded-full bg-cyan-400/80 border border-white shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+          </div>
+        )}
+      </div>
 
       {/* Footer Instructions */}
       <div className="absolute bottom-2 inset-x-0 text-center text-[10px] text-neutral-400 pointer-events-none">
-        Left Click to Place Block • Right Click to Mine Block • Drag with mouse to orbit island 360°
+        {isMouseLocked
+          ? 'Mouse Captured • Move mouse to look around 360° • Left Click Place • Right Click Mine • ESC to release'
+          : 'Left Click Place • Right Click Mine • Drag with mouse to orbit or click Capture Mouse'}
       </div>
     </div>
   )

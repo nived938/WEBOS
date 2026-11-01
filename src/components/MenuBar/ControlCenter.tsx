@@ -1,6 +1,7 @@
 import React from 'react'
 import { useSettings } from '@/core/settings/SettingsContext'
 import { useWindowManager } from '@/core/windowManager/WindowContext'
+import { usePointerLock } from '@/core/pointer/PointerLockContext'
 import { soundService } from '@/core/audio/soundService'
 import {
   Wifi,
@@ -14,6 +15,9 @@ import {
   Monitor,
   Eye,
   Zap,
+  MousePointer2,
+  Lock,
+  Clock,
 } from 'lucide-react'
 
 interface ControlCenterProps {
@@ -23,9 +27,20 @@ interface ControlCenterProps {
 
 export const ControlCenter: React.FC<ControlCenterProps> = ({ isOpen, onClose }) => {
   const { settings, updateSettings, toggleTheme } = useSettings()
-  const { openApp } = useWindowManager()
+  const { openApp, lockSystem, sleepSystem } = useWindowManager()
+  const { isLocked: isPointerLocked, requestLock, releaseLock } = usePointerLock()
 
   if (!isOpen) return null
+
+  const handleTogglePointerCapture = () => {
+    soundService.playClick()
+    onClose()
+    if (isPointerLocked) {
+      releaseLock()
+    } else {
+      requestLock(document.body, 'desktop')
+    }
+  }
 
   return (
     <div
@@ -214,6 +229,68 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({ isOpen, onClose })
           onChange={(e) => updateSettings({ volume: Number(e.target.value) })}
           className="w-full accent-blue-500 cursor-pointer"
         />
+      </div>
+
+      {/* Immersive Desktop Pointer Capture Button */}
+      <button
+        onClick={handleTogglePointerCapture}
+        className={`w-full flex items-center justify-between p-3 rounded-2xl border transition-all ${
+          isPointerLocked
+            ? 'bg-cyan-500/20 border-cyan-400 text-white shadow-lg shadow-cyan-500/20'
+            : 'bg-white/10 hover:bg-white/15 border-white/10 text-neutral-200'
+        }`}
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+              isPointerLocked ? 'bg-cyan-500 text-neutral-950 animate-pulse' : 'bg-white/10 text-cyan-400'
+            }`}
+          >
+            <MousePointer2 size={16} />
+          </div>
+          <div className="text-left">
+            <div className="font-semibold text-white">Immersive Desktop Mode</div>
+            <div className="text-[10px] text-neutral-400">
+              {isPointerLocked ? 'Captured • Press ESC to release' : 'Click to capture mouse'}
+            </div>
+          </div>
+        </div>
+        <span
+          className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-medium ${
+            isPointerLocked ? 'bg-cyan-500 text-neutral-950' : 'bg-white/10 text-neutral-400'
+          }`}
+        >
+          {isPointerLocked ? 'ACTIVE' : 'CAPTURE'}
+        </span>
+      </button>
+
+      {/* Quick Lock & Sleep Action Row */}
+      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/10">
+        <button
+          onClick={() => {
+            soundService.playClick()
+            onClose()
+            lockSystem()
+          }}
+          className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition"
+          title="Lock Screen (Ctrl+Alt+L)"
+        >
+          <Lock size={13} className="text-cyan-400" />
+          <span className="font-medium text-[11px]">Lock Screen</span>
+        </button>
+
+        <button
+          onClick={() => {
+            soundService.playClick()
+            onClose()
+            sleepSystem()
+          }}
+          className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition"
+          title="Enter Virtual Sleep"
+        >
+          <Moon size={13} className="text-purple-400" />
+          <span className="font-medium text-[11px]">Sleep</span>
+        </button>
       </div>
 
       {/* Now Playing Widget */}

@@ -6,8 +6,18 @@ import { WALLPAPERS } from '@/core/settings/wallpapers'
 import { useFileSystem } from '@/core/filesystem/FileSystemContext'
 import { soundService } from '@/core/audio/soundService'
 import { useNotifications } from '@/core/notifications/NotificationContext'
-import type { AccentColor, ThemeMode, CursorStyle, PerformanceMode } from '@/types'
+import { usePointerLock } from '@/core/pointer/PointerLockContext'
+import { hashPin, generateRecoveryKey } from '@/core/security/cryptoPin'
+import type { AccentColor, ThemeMode, CursorStyle, PerformanceMode, AutoLockTimeout } from '@/types'
 import {
+  User,
+  Bot,
+  Compass,
+  Key,
+  Copy,
+  RefreshCw,
+  ShieldCheck,
+  AlertCircle,
   Palette,
   Image,
   Sliders,
@@ -20,15 +30,18 @@ import {
   Moon,
   Sparkles,
   Check,
+  CheckCheck,
   Monitor,
   Laptop,
   Upload,
   Trash2,
   Eye,
+  EyeOff,
   Shield,
   MousePointer,
   Lock,
   Zap,
+  Clock,
 } from 'lucide-react'
 
 export const SettingsApp: React.FC<AppInstanceProps> = () => {
@@ -36,8 +49,10 @@ export const SettingsApp: React.FC<AppInstanceProps> = () => {
   const { lockSystem } = useWindowManager()
   const { nodes, resetToDefault } = useFileSystem()
   const { addNotification } = useNotifications()
+  const { isSupported: isPointerLockSupported, isLocked: isPointerLocked, requestLock: requestPointerLock } = usePointerLock()
 
   const [activeSection, setActiveSection] = useState<
+    | 'profile'
     | 'appearance'
     | 'wallpaper'
     | 'dock'
@@ -47,8 +62,17 @@ export const SettingsApp: React.FC<AppInstanceProps> = () => {
     | 'notifications'
     | 'storage'
     | 'about'
-  >('appearance')
+  >('profile')
   const [wallpaperFilter, setWallpaperFilter] = useState<'all' | 'dynamic' | 'gradient'>('all')
+  const [lockWallpaperFilter, setLockWallpaperFilter] = useState<'all' | 'dynamic' | 'gradient'>('all')
+
+  // PIN Form state
+  const [newPin, setNewPin] = useState('')
+  const [confirmPin, setConfirmPin] = useState('')
+  const [showPinFields, setShowPinFields] = useState(false)
+  const [pinMessage, setPinMessage] = useState<{ text: string; isError: boolean } | null>(null)
+  const [isHashing, setIsHashing] = useState(false)
+  const [copiedKey, setCopiedKey] = useState(false)
 
   const handleUploadCustomWallpaper = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -74,6 +98,101 @@ export const SettingsApp: React.FC<AppInstanceProps> = () => {
     reader.readAsDataURL(file)
   }
 
+  const handleUploadCustomAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      addNotification('Invalid Format', 'Please upload a PNG, JPG, WebP, or SVG image.', 'settings')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      addNotification('File Exceeds Limit', 'Avatar image should be under 2MB.', 'settings')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      updateSettings({ userAvatar: dataUrl })
+      soundService.playClick()
+      addNotification('Avatar Updated', 'Custom profile picture set successfully.', 'settings')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleUploadLockWallpaper = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      addNotification('Invalid Format', 'Please upload a PNG, JPG, WebP, or SVG image.', 'settings')
+      return
+    }
+    if (file.size > 2.5 * 1024 * 1024) {
+      addNotification('File Exceeds Limit', 'Lock wallpaper should be under 2.5MB for fast loading.', 'settings')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      updateSettings({
+        lockWallpaperId: 'custom',
+        customLockWallpaperUrl: dataUrl,
+        lockWallpaperType: 'custom',
+      })
+      soundService.playClick()
+      addNotification('Lock Wallpaper Updated', `Set custom lock wallpaper from "${file.name}"`, 'settings')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleUpdatePin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPinMessage(null)
+    if (!newPin || newPin.length < 4 || newPin.length > 8) {
+      setPinMessage({ text: 'PIN must be between 4 and 8 digits.', isError: true })
+      return
+    }
+    if (newPin !== confirmPin) {
+      setPinMessage({ text: 'PINs do not match. Please verify both fields.', isError: true })
+      return
+    }
+
+    setIsHashing(true)
+    try {
+      const { hash, salt } = await hashPin(newPin)
+      updateSettings({
+        pinHash: hash,
+        pinSalt: salt,
+        isPinSet: true,
+        lockPin: newPin,
+      })
+      soundService.playStartup()
+      setPinMessage({ text: 'PIN secured with PBKDF2 (100,000 iterations)!', isError: false })
+      setNewPin('')
+      setConfirmPin('')
+      addNotification('Security Updated', 'New PIN hashed and saved securely with cryptographic salt.', 'settings')
+    } catch {
+      setPinMessage({ text: 'Failed to compute cryptographic hash.', isError: true })
+    } finally {
+      setIsHashing(false)
+    }
+  }
+
+  const handleCopyRecoveryKey = () => {
+    const key = settings.recoveryKey || 'NOVA-8492-7201-9482'
+    navigator.clipboard?.writeText(key)
+    setCopiedKey(true)
+    soundService.playClick()
+    setTimeout(() => setCopiedKey(false), 2000)
+    addNotification('Recovery Key Copied', 'Copied recovery key to system clipboard.', 'settings')
+  }
+
+  const handleRegenerateRecoveryKey = () => {
+    soundService.playClick()
+    const newKey = generateRecoveryKey()
+    updateSettings({ recoveryKey: newKey })
+    addNotification('Recovery Key Regenerated', 'A new emergency recovery key has been created.', 'settings')
+  }
+
   const [showResetModal, setShowResetModal] = useState(false)
 
   const accentOptions: { id: AccentColor; name: string; color: string }[] = [
@@ -83,6 +202,23 @@ export const SettingsApp: React.FC<AppInstanceProps> = () => {
     { id: 'orange', name: 'Orange', color: '#f97316' },
     { id: 'rose', name: 'Rose', color: '#f43f5e' },
     { id: 'amber', name: 'Amber', color: '#f59e0b' },
+  ]
+
+  const autoLockOptions: { value: AutoLockTimeout; label: string }[] = [
+    { value: 0, label: 'Never (Disabled)' },
+    { value: 1, label: '1 minute' },
+    { value: 2, label: '2 minutes' },
+    { value: 5, label: '5 minutes (Recommended)' },
+    { value: 10, label: '10 minutes' },
+    { value: 15, label: '15 minutes' },
+    { value: 30, label: '30 minutes' },
+  ]
+
+  const avatarPresets = [
+    { id: 'avatar-nova', name: 'Astronaut', icon: User, color: 'text-cyan-400', bg: 'from-blue-600 to-cyan-500' },
+    { id: 'avatar-bot', name: 'Android', icon: Bot, color: 'text-emerald-400', bg: 'from-emerald-600 to-teal-500' },
+    { id: 'avatar-compass', name: 'Navigator', icon: Compass, color: 'text-purple-400', bg: 'from-purple-600 to-indigo-500' },
+    { id: 'avatar-sparkles', name: 'Nebula', icon: Sparkles, color: 'text-amber-400', bg: 'from-amber-600 to-rose-500' },
   ]
 
   // Storage calculations
@@ -107,6 +243,19 @@ export const SettingsApp: React.FC<AppInstanceProps> = () => {
       {/* Sidebar Navigation */}
       <div className="w-52 border-r border-white/10 bg-black/20 flex flex-col p-3 space-y-1 text-xs">
         <div className="px-3 py-2 font-bold text-white text-sm mb-1">Settings</div>
+
+        {/* User Profile item at top */}
+        <button
+          onClick={() => {
+            soundService.playClick()
+            setActiveSection('profile')
+          }}
+          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition ${
+            activeSection === 'profile' ? 'bg-blue-600/20 text-blue-300 font-semibold' : 'text-neutral-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <User size={15} /> <span>User Profile</span>
+        </button>
 
         <button
           onClick={() => {
@@ -219,6 +368,183 @@ export const SettingsApp: React.FC<AppInstanceProps> = () => {
 
       {/* Main Settings Panel */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
+        {/* User Profile Section */}
+        {activeSection === 'profile' && (
+          <div className="space-y-6 max-w-xl">
+            <div>
+              <h3 className="text-base font-bold text-white mb-1">User Profile</h3>
+              <p className="text-neutral-400 text-xs">
+                Manage your NOVA identity, lock screen profile card, and avatar customizations.
+              </p>
+            </div>
+
+            {/* Profile Overview Card */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-900/30 via-purple-900/20 to-neutral-900/40 border border-white/15 flex items-center gap-4 shadow-xl">
+              <div className="relative group">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-500 to-cyan-400 p-[2px] shadow-lg flex items-center justify-center overflow-hidden">
+                  {settings.userAvatar && (settings.userAvatar.startsWith('data:image/') || settings.userAvatar.startsWith('http')) ? (
+                    <img src={settings.userAvatar} alt="Avatar" className="w-full h-full object-cover rounded-2xl" />
+                  ) : settings.userAvatar === 'avatar-bot' ? (
+                    <div className="w-full h-full bg-neutral-900 rounded-2xl flex items-center justify-center">
+                      <Bot size={28} className="text-cyan-300" />
+                    </div>
+                  ) : settings.userAvatar === 'avatar-compass' ? (
+                    <div className="w-full h-full bg-neutral-900 rounded-2xl flex items-center justify-center">
+                      <Compass size={28} className="text-purple-300" />
+                    </div>
+                  ) : settings.userAvatar === 'avatar-sparkles' ? (
+                    <div className="w-full h-full bg-neutral-900 rounded-2xl flex items-center justify-center">
+                      <Sparkles size={28} className="text-amber-300" />
+                    </div>
+                  ) : (
+                    <div className="w-full h-full bg-neutral-900 rounded-2xl flex items-center justify-center">
+                      <User size={28} className="text-cyan-300" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-white truncate">
+                    {settings.username || 'Commander Nova'}
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                    Administrator
+                  </span>
+                </div>
+                <p className="text-neutral-300 text-xs mt-0.5 truncate">
+                  {settings.userBio || 'Cosmic Navigator & System Architect'}
+                </p>
+                <p className="text-[11px] text-cyan-300/80 font-mono mt-1">
+                  &ldquo;{settings.userGreeting || 'Welcome back to NOVA OS'}&rdquo;
+                </p>
+              </div>
+            </div>
+
+            {/* Profile Identity Form */}
+            <div className="space-y-4 p-4 rounded-2xl bg-white/5 border border-white/10">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-300">Display Name</label>
+                <input
+                  type="text"
+                  value={settings.username || ''}
+                  placeholder="e.g. Commander Nova"
+                  onChange={(e) => updateSettings({ username: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/15 text-white text-xs focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-300">Profile Bio / Description</label>
+                <input
+                  type="text"
+                  value={settings.userBio || ''}
+                  placeholder="e.g. Cosmic Navigator & System Architect"
+                  onChange={(e) => updateSettings({ userBio: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/15 text-white text-xs focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-300">Lock Screen Greeting</label>
+                <input
+                  type="text"
+                  value={settings.userGreeting || ''}
+                  placeholder="e.g. Welcome back to NOVA OS"
+                  onChange={(e) => updateSettings({ userGreeting: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/15 text-white text-xs focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Avatar Selector */}
+            <div className="space-y-3 p-4 rounded-2xl bg-white/5 border border-white/10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-semibold text-white">Avatar Selection</h4>
+                  <p className="text-[11px] text-neutral-400">Choose a cosmic avatar preset or upload your custom photo.</p>
+                </div>
+                <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium cursor-pointer transition shadow-md shadow-blue-600/20">
+                  <Upload size={13} />
+                  <span>Upload Photo</span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    onChange={handleUploadCustomAvatar}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                {avatarPresets.map((preset) => {
+                  const Icon = preset.icon
+                  const isSelected = settings.userAvatar === preset.id
+                  return (
+                    <button
+                      key={preset.id}
+                      onClick={() => {
+                        soundService.playClick()
+                        updateSettings({ userAvatar: preset.id })
+                      }}
+                      className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-500/20 ring-2 ring-blue-500/50 scale-102'
+                          : 'border-white/10 bg-white/5 hover:bg-white/10 text-neutral-300'
+                      }`}
+                    >
+                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-tr ${preset.bg} flex items-center justify-center shadow-md mb-2`}>
+                        <Icon size={24} className="text-white" />
+                      </div>
+                      <span className="text-xs font-medium text-white">{preset.name}</span>
+                      {isSelected && <span className="text-[9px] text-blue-300 font-mono mt-0.5">Active</span>}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {settings.userAvatar && (settings.userAvatar.startsWith('data:image/') || settings.userAvatar.startsWith('http')) && (
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 mt-2 text-xs">
+                  <span className="text-blue-200">Custom user photo is active</span>
+                  <button
+                    onClick={() => {
+                      soundService.playClick()
+                      updateSettings({ userAvatar: 'avatar-nova' })
+                    }}
+                    className="text-red-400 hover:text-red-300 text-[11px] font-medium"
+                  >
+                    Reset to Preset
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Profile Accent Color */}
+            <div className="space-y-2 p-4 rounded-2xl bg-white/5 border border-white/10">
+              <label className="text-xs font-semibold text-neutral-300">Profile Accent Hue</label>
+              <div className="flex items-center gap-3">
+                {accentOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => {
+                      soundService.playClick()
+                      updateSettings({ profileAccentColor: opt.id })
+                    }}
+                    style={{ backgroundColor: opt.color }}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition shadow-md ${
+                      settings.profileAccentColor === opt.id ? 'ring-2 ring-white ring-offset-2 ring-offset-neutral-900 scale-110' : 'hover:scale-105'
+                    }`}
+                    title={opt.name}
+                  >
+                    {settings.profileAccentColor === opt.id && <Check size={14} className="text-white" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Appearance Section */}
         {activeSection === 'appearance' && (
           <div className="space-y-6 max-w-lg">
@@ -642,38 +968,205 @@ export const SettingsApp: React.FC<AppInstanceProps> = () => {
                 })}
               </div>
             </div>
+
+            {/* Immersive Pointer Capture (Pointer Lock API) */}
+            <div className="space-y-3 p-3.5 rounded-xl bg-white/5 border border-white/10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-white flex items-center gap-1.5">
+                    <MousePointer size={14} className="text-cyan-400" />
+                    <span>Hardware Pointer Lock API</span>
+                  </div>
+                  <div className="text-[11px] text-neutral-400">
+                    Direct mouse movement capture for full 360-degree rotation in 3D applications
+                  </div>
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                    isPointerLockSupported
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  }`}
+                >
+                  {isPointerLockSupported ? 'API Supported' : 'Unavailable'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <div className="text-[11px] text-neutral-300">
+                  Status: <span className="text-white font-mono">{isPointerLocked ? 'Captured (HUD Active • Press ESC)' : 'Normal System Cursor'}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    soundService.playClick()
+                    requestPointerLock()
+                  }}
+                  disabled={!isPointerLockSupported}
+                  className="px-3 py-1.5 rounded-xl bg-cyan-600/30 hover:bg-cyan-600 text-cyan-200 hover:text-white border border-cyan-500/30 font-medium transition text-xs disabled:opacity-50"
+                >
+                  Test Mouse Capture
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
         {/* Security & Lock Screen Section */}
         {activeSection === 'security' && (
-          <div className="space-y-6 max-w-lg">
+          <div className="space-y-6 max-w-xl">
             <div>
               <h3 className="text-base font-bold text-white mb-1">Security & Lock Screen</h3>
               <p className="text-neutral-400 text-xs">
-                Manage user credentials, PIN authorization, and session security.
+                Manage cryptographic PIN authentication, lock screen wallpaper, and session inactivity rules.
               </p>
             </div>
 
-            {/* Username setting */}
-            <div className="space-y-1.5 p-3.5 rounded-xl bg-white/5 border border-white/10">
-              <label className="font-semibold text-white text-xs block">Account Name</label>
-              <input
-                type="text"
-                value={settings.username || 'NOVA Administrator'}
-                onChange={(e) => updateSettings({ username: e.target.value })}
-                className="w-full px-3 py-1.5 rounded-lg bg-black/40 border border-white/15 text-white text-xs focus:outline-none focus:border-blue-500"
-              />
+            {/* Privacy Gate Warning Callout */}
+            <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/25 flex items-start gap-3">
+              <ShieldCheck className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+              <div className="text-xs leading-relaxed">
+                <span className="font-bold text-blue-200 block mb-0.5">
+                  Client-Side Privacy Barrier Notice
+                </span>
+                <span className="text-neutral-300 text-[11px]">
+                  NOVA OS secures your session using Web Crypto PBKDF2 (HMAC-SHA-256 with 100,000 iterations and a 128-bit cryptographic salt). Passwords are never stored in plaintext. This provides an effective local privacy barrier in your browser, but does not provide physical machine disk encryption.
+                </span>
+              </div>
             </div>
 
-            {/* Lock Screen Toggle */}
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/5 border border-white/10">
+            {/* Lock Screen Wallpaper Configuration */}
+            <div className="space-y-3 p-4 rounded-2xl bg-white/5 border border-white/10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-semibold text-white">Lock Screen Wallpaper</h4>
+                  <p className="text-[11px] text-neutral-400">
+                    Select a dedicated lock screen background distinct from your desktop.
+                  </p>
+                </div>
+                <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium cursor-pointer transition shadow-md shadow-blue-600/20">
+                  <Upload size={13} />
+                  <span>Upload Custom</span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    onChange={handleUploadLockWallpaper}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {settings.customLockWallpaperUrl && (
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs">
+                  <span className="text-blue-200">Custom lock wallpaper is active</span>
+                  <button
+                    onClick={() => {
+                      soundService.playClick()
+                      updateSettings({
+                        lockWallpaperId: settings.wallpaperId,
+                        customLockWallpaperUrl: undefined,
+                        lockWallpaperType: 'dynamic',
+                      })
+                      addNotification('Lock Wallpaper Reset', 'Reverted to system default wallpaper.', 'settings')
+                    }}
+                    className="text-red-400 hover:text-red-300 text-[11px] font-medium"
+                  >
+                    Remove Custom
+                  </button>
+                </div>
+              )}
+
+              {/* Category Filter Tabs */}
+              <div className="flex gap-1 p-1 bg-black/30 rounded-xl border border-white/10 w-fit text-xs">
+                {(['all', 'dynamic', 'gradient'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => {
+                      soundService.playClick()
+                      setLockWallpaperFilter(tab)
+                    }}
+                    className={`px-3 py-1 rounded-lg capitalize transition font-medium ${
+                      lockWallpaperFilter === tab
+                        ? 'bg-white/15 text-white shadow-sm'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+
+              {/* Wallpapers Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
+                {WALLPAPERS.filter((wp) => lockWallpaperFilter === 'all' || wp.type === lockWallpaperFilter).map((wp) => {
+                  const isSelected =
+                    (settings.lockWallpaperId || settings.wallpaperId) === wp.id &&
+                    !settings.customLockWallpaperUrl
+                  return (
+                    <button
+                      key={wp.id}
+                      onClick={() => {
+                        soundService.playClick()
+                        updateSettings({
+                          lockWallpaperId: wp.id,
+                          customLockWallpaperUrl: undefined,
+                          lockWallpaperType: wp.type as any,
+                        })
+                      }}
+                      className={`relative aspect-video rounded-xl overflow-hidden border text-left transition ${
+                        isSelected
+                          ? 'border-blue-500 ring-2 ring-blue-500 scale-[1.02]'
+                          : 'border-white/10 hover:border-white/30'
+                      }`}
+                      style={{ background: wp.thumbnail }}
+                    >
+                      <div className="absolute inset-x-0 bottom-0 p-1.5 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-between">
+                        <span className="text-[10px] text-white font-medium truncate">{wp.name}</span>
+                        {isSelected && <Check size={12} className="text-blue-400" />}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Inactivity Auto-Lock Timer */}
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-white flex items-center gap-1.5">
+                    <Clock size={14} className="text-cyan-400" />
+                    <span>Automatic Inactivity Lock</span>
+                  </div>
+                  <div className="text-[11px] text-neutral-400">
+                    Automatically lock the operating system when idle
+                  </div>
+                </div>
+                <select
+                  value={settings.autoLockTimeout ?? 5}
+                  onChange={(e) => {
+                    soundService.playClick()
+                    updateSettings({ autoLockTimeout: Number(e.target.value) as AutoLockTimeout })
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-black/40 border border-white/15 text-white text-xs focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  {autoLockOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value} className="bg-neutral-800 text-white">
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* PIN Requirement Toggle */}
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10">
               <div>
                 <div className="font-semibold text-white flex items-center gap-1.5">
-                  <Lock size={14} className="text-blue-400" /> Require PIN on Startup & Wake
+                  <Lock size={14} className="text-blue-400" />
+                  <span>Require PIN to Unlock System</span>
                 </div>
                 <div className="text-[11px] text-neutral-400">
-                  Shows secure biometric/PIN lock screen
+                  When enabled, entering your cryptographic PIN is required to unlock NOVA OS
                 </div>
               </div>
               <input
@@ -684,34 +1177,123 @@ export const SettingsApp: React.FC<AppInstanceProps> = () => {
               />
             </div>
 
-            {/* PIN Configuration */}
-            <div className="space-y-2 p-3.5 rounded-xl bg-white/5 border border-white/10">
-              <label className="font-semibold text-white text-xs block">Security PIN Code</label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="password"
-                  maxLength={8}
-                  placeholder="1234"
-                  value={settings.lockPin || '1234'}
-                  onChange={(e) => updateSettings({ lockPin: e.target.value })}
-                  className="w-40 px-3 py-1.5 rounded-lg bg-black/40 border border-white/15 text-white text-center font-mono tracking-widest text-xs focus:outline-none focus:border-blue-500"
-                />
-                <span className="text-[11px] text-neutral-400">Default fallback PIN: 1234</span>
+            {/* Cryptographic PIN Change Form */}
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="font-semibold text-white flex items-center gap-1.5">
+                  <Key size={14} className="text-amber-400" />
+                  <span>Change Security PIN</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPinFields((p) => !p)}
+                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                >
+                  {showPinFields ? <EyeOff size={13} /> : <Eye size={13} />}
+                  <span>{showPinFields ? 'Hide PIN' : 'Show PIN'}</span>
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdatePin} className="space-y-3 pt-1">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] text-neutral-400 block mb-1">New PIN (4–8 digits)</label>
+                    <input
+                      type={showPinFields ? 'text' : 'password'}
+                      maxLength={8}
+                      placeholder="••••"
+                      value={newPin}
+                      onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                      className="w-full px-3 py-1.5 rounded-xl bg-black/40 border border-white/15 text-white font-mono text-center tracking-widest text-xs focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-neutral-400 block mb-1">Confirm New PIN</label>
+                    <input
+                      type={showPinFields ? 'text' : 'password'}
+                      maxLength={8}
+                      placeholder="••••"
+                      value={confirmPin}
+                      onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                      className="w-full px-3 py-1.5 rounded-xl bg-black/40 border border-white/15 text-white font-mono text-center tracking-widest text-xs focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {pinMessage && (
+                  <div
+                    className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+                      pinMessage.isError
+                        ? 'bg-red-500/15 border border-red-500/30 text-red-300'
+                        : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+                    }`}
+                  >
+                    {pinMessage.isError ? <AlertCircle size={14} /> : <CheckCheck size={14} />}
+                    <span>{pinMessage.text}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={isHashing || !newPin || !confirmPin}
+                    className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-medium text-xs transition shadow-md shadow-blue-600/20"
+                  >
+                    {isHashing ? 'Hashing (PBKDF2)...' : 'Update Security PIN'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Emergency Recovery Key */}
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-white flex items-center gap-1.5">
+                    <ShieldCheck size={14} className="text-purple-400" />
+                    <span>Emergency Recovery Key</span>
+                  </div>
+                  <div className="text-[11px] text-neutral-400">
+                    Use this key if you forget your PIN to unlock and reset the lock screen
+                  </div>
+                </div>
+                <button
+                  onClick={handleRegenerateRecoveryKey}
+                  className="text-xs text-neutral-400 hover:text-white flex items-center gap-1"
+                  title="Generate New Recovery Key"
+                >
+                  <RefreshCw size={12} />
+                  <span>Regenerate</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <div className="flex-1 px-3 py-2 rounded-xl bg-black/50 border border-white/15 font-mono text-cyan-300 text-xs tracking-wider select-all font-semibold text-center">
+                  {settings.recoveryKey || 'NOVA-8492-7201-9482'}
+                </div>
+                <button
+                  onClick={handleCopyRecoveryKey}
+                  className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium flex items-center gap-1.5 transition"
+                >
+                  {copiedKey ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                  <span>{copiedKey ? 'Copied' : 'Copy'}</span>
+                </button>
               </div>
             </div>
 
-            {/* Lock Now Action */}
-            <div className="pt-2">
+            {/* Lock Now Action Button */}
+            <div className="pt-2 flex items-center gap-3">
               <button
                 onClick={() => {
                   soundService.playClick()
                   lockSystem()
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium transition"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition shadow-lg shadow-blue-600/25"
               >
                 <Lock size={14} />
-                <span>Lock Screen Now (Ctrl + L)</span>
+                <span>Lock Screen Now</span>
               </button>
+              <span className="text-[11px] text-neutral-400 font-mono">Shortcut: Ctrl + Alt + L</span>
             </div>
           </div>
         )}

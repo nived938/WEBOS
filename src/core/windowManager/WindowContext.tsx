@@ -4,6 +4,7 @@ import type { AppId } from '@/types'
 import { APPS_REGISTRY } from '@/core/appRegistry/apps.config'
 import { soundService } from '@/core/audio/soundService'
 import { useSettings } from '@/core/settings/SettingsContext'
+import { verifyPin } from '@/core/security/cryptoPin'
 
 const WindowManagerContext = createContext<WindowManagerContextType | null>(null)
 
@@ -19,6 +20,8 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLauncherOpen, setIsLauncherOpen] = useState(false)
   const [isLocked, setIsLocked] = useState(false)
   const [isBooting, setIsBooting] = useState(false)
+  const [isAsleep, setIsAsleep] = useState(false)
+  const [isShutDown, setIsShutDown] = useState(false)
 
   // Focus a window
   const focusWindow = useCallback((id: string) => {
@@ -86,23 +89,87 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [])
 
   const unlockSystem = useCallback(
-    (pin?: string): boolean => {
-      const validPin = settings.lockPin || '1234'
-      if (!pin || pin === validPin || pin === 'guest' || pin === '1234') {
+    async (pin?: string): Promise<boolean> => {
+      // If no PIN required or guest unlock
+      if (!settings.isPinSet || pin === 'guest') {
         soundService.playStartup()
         setIsLocked(false)
+        setIsAsleep(false)
         return true
       }
+
+      // If recovery key supplied
+      if (
+        pin &&
+        settings.recoveryKey &&
+        pin.trim().toUpperCase() === settings.recoveryKey.trim().toUpperCase()
+      ) {
+        soundService.playStartup()
+        setIsLocked(false)
+        setIsAsleep(false)
+        return true
+      }
+
+      // Web Crypto PBKDF2 verification against stored hash & salt
+      if (pin && settings.pinHash && settings.pinSalt) {
+        const matches = await verifyPin(pin, settings.pinHash, settings.pinSalt)
+        if (matches) {
+          soundService.playStartup()
+          setIsLocked(false)
+          setIsAsleep(false)
+          return true
+        }
+      }
+
+      // Fallback for default '1234'
+      if (pin === '1234' || pin === settings.lockPin) {
+        soundService.playStartup()
+        setIsLocked(false)
+        setIsAsleep(false)
+        return true
+      }
+
       return false
     },
-    [settings.lockPin]
+    [settings.isPinSet, settings.pinHash, settings.pinSalt, settings.lockPin, settings.recoveryKey]
   )
+
+  // Virtual Power Management (Sleep, Restart, Power Off)
+  const sleepSystem = useCallback(() => {
+    soundService.playClick()
+    setIsAsleep(true)
+    setIsLocked(true)
+    setIsOverviewOpen(false)
+    setIsLauncherOpen(false)
+  }, [])
+
+  const wakeSystem = useCallback(() => {
+    soundService.playClick()
+    setIsAsleep(false)
+  }, [])
+
+  const powerOffSystem = useCallback(() => {
+    soundService.playClick()
+    setIsShutDown(true)
+    setIsLocked(false)
+    setIsAsleep(false)
+    setIsOverviewOpen(false)
+    setIsLauncherOpen(false)
+  }, [])
+
+  const powerOnSystem = useCallback(() => {
+    soundService.playStartup()
+    setIsShutDown(false)
+    setIsBooting(true)
+  }, [])
 
   // Boot & Reboot
   const rebootSystem = useCallback(() => {
     soundService.playStartup()
     setIsBooting(true)
     setIsLocked(false)
+    setIsAsleep(false)
+    setIsShutDown(false)
     setIsOverviewOpen(false)
     setIsLauncherOpen(false)
   }, [])
@@ -405,6 +472,12 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
         isLocked,
         lockSystem,
         unlockSystem,
+        isAsleep,
+        sleepSystem,
+        wakeSystem,
+        isShutDown,
+        powerOffSystem,
+        powerOnSystem,
         isBooting,
         rebootSystem,
         completeBoot,
