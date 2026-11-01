@@ -69,4 +69,81 @@ describe('Virtual File System (VFS)', () => {
     expect(results.length).toBeGreaterThan(0)
     expect(results[0].name).toBe('secret-recipe.txt')
   })
+
+  it('should recursively delete a folder and all its descendants', () => {
+    const parentFolder = vfs.createFolder('folder-documents', 'DeepFolder')
+    const subFolder = vfs.createFolder(parentFolder.id, 'SubFolder')
+    const nestedFile = vfs.createFile(subFolder.id, 'deep.txt', 'Nested content')
+
+    expect(vfs.getNode(parentFolder.id)).toBeDefined()
+    expect(vfs.getNode(subFolder.id)).toBeDefined()
+    expect(vfs.getNode(nestedFile.id)).toBeDefined()
+
+    const success = vfs.deleteFolderRecursive(parentFolder.id)
+    expect(success).toBe(true)
+
+    expect(vfs.getNode(parentFolder.id)).toBeUndefined()
+    expect(vfs.getNode(subFolder.id)).toBeUndefined()
+    expect(vfs.getNode(nestedFile.id)).toBeUndefined()
+  })
+
+  it('should recursively copy a folder with all nested files preserving structure', () => {
+    const rootFolder = vfs.createFolder('folder-documents', 'SourceFolder')
+    const nestedSub = vfs.createFolder(rootFolder.id, 'ChildDir')
+    vfs.createFile(nestedSub.id, 'child.txt', 'Hello Child')
+
+    const copied = vfs.copyFolderRecursive(rootFolder.id, 'folder-desktop')
+    expect(copied).toBeDefined()
+    expect(copied?.id).not.toBe(rootFolder.id)
+    expect(copied?.name).toContain('SourceFolder (Copy)')
+    expect(copied?.parentId).toBe('folder-desktop')
+
+    const copiedSubDirs = vfs.getChildren(copied!.id)
+    expect(copiedSubDirs).toHaveLength(1)
+    expect(copiedSubDirs[0].name).toBe('ChildDir')
+
+    const copiedFiles = vfs.getChildren(copiedSubDirs[0].id)
+    expect(copiedFiles).toHaveLength(1)
+    expect(copiedFiles[0].name).toBe('child.txt')
+    expect(copiedFiles[0].content).toBe('Hello Child')
+  })
+
+  it('should prevent circular folder nesting cycles in moveNode', () => {
+    const dirA = vfs.createFolder('folder-documents', 'DirA')
+    const dirB = vfs.createFolder(dirA.id, 'DirB')
+    const dirC = vfs.createFolder(dirB.id, 'DirC')
+
+    // Moving DirA into DirA must fail
+    expect(vfs.moveNode(dirA.id, dirA.id)).toBe(false)
+
+    // Moving DirA into its child DirB or grandchild DirC must fail
+    expect(vfs.moveNode(dirA.id, dirB.id)).toBe(false)
+    expect(vfs.moveNode(dirA.id, dirC.id)).toBe(false)
+
+    // Moving DirC to documents should succeed
+    expect(vfs.moveNode(dirC.id, 'folder-documents')).toBe(true)
+    expect(vfs.getNode(dirC.id)?.parentId).toBe('folder-documents')
+  })
+
+  it('should compute storage statistics correctly', async () => {
+    const stats = await vfs.getStorageStats()
+    expect(stats.fileCount).toBeGreaterThan(0)
+    expect(stats.folderCount).toBeGreaterThan(0)
+    expect(stats.usedBytes).toBeGreaterThan(0)
+  })
+
+  it('should export and import VFS backup archives', async () => {
+    vfs.createFile('folder-documents', 'export-test.txt', 'Exported content data')
+    const archiveJson = await vfs.exportArchive()
+    expect(archiveJson).toContain('export-test.txt')
+
+    // Reset and verify it's gone
+    vfs.resetToDefault()
+    expect(vfs.search('Exported content data')).toHaveLength(0)
+
+    // Import and verify restored
+    const imported = await vfs.importArchive(archiveJson, 'merge')
+    expect(imported).toBe(true)
+    expect(vfs.search('Exported content data').length).toBeGreaterThan(0)
+  })
 })

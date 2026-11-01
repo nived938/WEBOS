@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { vfs } from './vfs'
-import type { FSNode } from './types'
+import type { FSNode, StorageStats } from './types'
 
 interface FileSystemContextType {
   nodes: FSNode[]
@@ -8,6 +8,7 @@ interface FileSystemContextType {
   getChildren: (parentId: string | null) => FSNode[]
   getTrashNodes: () => FSNode[]
   createFile: (parentId: string | null, name: string, content?: string, mimeType?: string) => FSNode
+  createBinaryFile: (parentId: string | null, name: string, blob: Blob, mimeType?: string) => FSNode
   createFolder: (parentId: string | null, name: string) => FSNode
   renameNode: (id: string, newName: string) => boolean
   updateFileContent: (id: string, content: string) => boolean
@@ -15,12 +16,17 @@ interface FileSystemContextType {
   restoreFromTrash: (id: string) => boolean
   emptyTrash: () => void
   deletePermanently: (id: string) => boolean
+  deleteFolderRecursive: (folderId: string) => boolean
+  copyFolderRecursive: (folderId: string, targetParentId: string | null) => FSNode | null
   moveNode: (id: string, targetParentId: string | null) => boolean
   copyNode: (id: string, targetParentId: string | null) => FSNode | null
   searchFiles: (query: string) => FSNode[]
   resetToDefault: () => void
   importFiles: (parentId: string | null, fileList: FileList) => Promise<FSNode[]>
   exportFile: (id: string) => void
+  exportArchive: () => Promise<string>
+  importArchive: (jsonString: string, mode?: 'merge' | 'replace') => Promise<boolean>
+  getStorageStats: () => Promise<StorageStats>
 }
 
 const FileSystemContext = createContext<FileSystemContextType | null>(null)
@@ -88,6 +94,7 @@ export const FileSystemProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     getChildren: (parentId) => vfs.getChildren(parentId),
     getTrashNodes: () => vfs.getTrashNodes(),
     createFile: (parentId, name, content, mimeType) => vfs.createFile(parentId, name, content, mimeType),
+    createBinaryFile: (parentId, name, blob, mimeType) => vfs.createBinaryFile(parentId, name, blob, mimeType),
     createFolder: (parentId, name) => vfs.createFolder(parentId, name),
     renameNode: (id, newName) => vfs.renameNode(id, newName),
     updateFileContent: (id, content) => vfs.updateFileContent(id, content),
@@ -95,12 +102,17 @@ export const FileSystemProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     restoreFromTrash: (id) => vfs.restoreFromTrash(id),
     emptyTrash: () => vfs.emptyTrash(),
     deletePermanently: (id) => vfs.deletePermanently(id),
+    deleteFolderRecursive: (folderId) => vfs.deleteFolderRecursive(folderId),
+    copyFolderRecursive: (folderId, targetParentId) => vfs.copyFolderRecursive(folderId, targetParentId),
     moveNode: (id, targetParentId) => vfs.moveNode(id, targetParentId),
     copyNode: (id, targetParentId) => vfs.copyNode(id, targetParentId),
     searchFiles: (query) => vfs.search(query),
     resetToDefault: () => vfs.resetToDefault(),
     importFiles,
     exportFile,
+    exportArchive: () => vfs.exportArchive(),
+    importArchive: (jsonString, mode) => vfs.importArchive(jsonString, mode),
+    getStorageStats: () => vfs.getStorageStats(),
   }
 
   return <FileSystemContext.Provider value={value}>{children}</FileSystemContext.Provider>

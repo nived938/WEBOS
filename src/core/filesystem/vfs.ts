@@ -1,4 +1,4 @@
-import type { FSNode } from './types'
+import type { FSNode, StorageStats, VFSBackup, VFSExportNode } from './types'
 import { INITIAL_FILES } from './initialFiles'
 
 const DB_NAME = 'nova_os_db'
@@ -104,7 +104,7 @@ class VirtualFileSystem {
         const tx = this.db.transaction(STORE_NAME, 'readwrite')
         tx.objectStore(STORE_NAME).put(node)
       } catch {
-        // Fallback
+        // Fallback handled below
       }
     }
     this.saveToFallback()
@@ -116,7 +116,7 @@ class VirtualFileSystem {
         const tx = this.db.transaction(STORE_NAME, 'readwrite')
         tx.objectStore(STORE_NAME).delete(id)
       } catch {
-        // Fallback
+        // Fallback handled below
       }
     }
     this.saveToFallback()
@@ -139,10 +139,20 @@ class VirtualFileSystem {
 
   private saveToFallback() {
     try {
-      const list = Array.from(this.nodes.values())
-      localStorage.setItem(FALLBACK_KEY, JSON.stringify(list))
+      // Prevent QuotaExceededError by omitting large payloads from localStorage fallback
+      const safeList = Array.from(this.nodes.values()).map((node) => {
+        if (node.blob || (node.content && node.content.length > 50000)) {
+          return {
+            ...node,
+            blob: undefined,
+            content: node.content ? node.content.slice(0, 500) + '... [stored in IndexedDB]' : undefined,
+          }
+        }
+        return node
+      })
+      localStorage.setItem(FALLBACK_KEY, JSON.stringify(safeList))
     } catch {
-      // Storage quota or disabled
+      // Storage quota or disabled; IndexedDB remains primary
     }
   }
 
@@ -153,6 +163,19 @@ class VirtualFileSystem {
 
   private notify() {
     this.listeners.forEach((l) => l())
+  }
+
+  // Hierarchy validation helper
+  public isDescendant(nodeId: string, potentialAncestorId: string): boolean {
+    if (nodeId === potentialAncestorId) return true
+    let current = this.nodes.get(nodeId)
+    while (current && current.parentId) {
+      if (current.parentId === potentialAncestorId) {
+        return true
+      }
+      current = this.nodes.get(current.parentId)
+    }
+    return false
   }
 
   // File system API
@@ -182,6 +205,30 @@ class VirtualFileSystem {
       size: new Blob([content]).size,
       mimeType,
       content,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+    this.nodes.set(id, node)
+    this.saveNodeToDB(node)
+    this.notify()
+    return node
+  }
+
+  public createBinaryFile(
+    parentId: string | null,
+    name: string,
+    blob: Blob,
+    mimeType?: string
+  ): FSNode {
+    const id = 'file-bin-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7)
+    const node: FSNode = {
+      id,
+      name,
+      type: 'file',
+      parentId,
+      size: blob.size,
+      mimeType: mimeType || blob.type || 'application/octet-stream',
+      blob,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }
@@ -256,10 +303,105 @@ class VirtualFileSystem {
   public deletePermanently(id: string): boolean {
     const node = this.nodes.get(id)
     if (!node) return false
+    if (node.type === 'folder') {
+      return this.deleteFolderRecursive(id)
+    }
     this.nodes.delete(id)
     this.removeNodeFromDB(id)
     this.notify()
     return true
+  }
+
+  public deleteFolderRecursive(folderId: string): boolean {
+    const targetFolder = this.nodes.get(folderId)
+    if (!targetFolder) return false
+
+    // Collect all descendant ids
+    const toDelete: string[] = []
+    const queue: string[] = [folderId]
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!
+      toDelete.push(currentId)
+      for (const child of this.nodes.values()) {
+        if (child.parentId === currentId) {
+          queue.push(child.id)
+        }
+      }
+    }
+
+    // Delete in reverse order
+    for (const id of toDelete) {
+      this.nodes.delete(id)
+      this.removeNodeFromDB(id)
+    }
+
+    this.notify()
+    return true
+  }
+
+  public copyFolderRecursive(folderId: string, targetParentId: string | null): FSNode | null {
+    const sourceFolder = this.nodes.get(folderId)
+    if (!sourceFolder || sourceFolder.type !== 'folder') return null
+
+    // Prevent copying into itself or its descendants
+    if (targetParentId && (targetParentId === folderId || this.isDescendant(targetParentId, folderId))) {
+      return null
+    }
+
+    const idMap = new Map<string, string>()
+    const newRootId = 'folder-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7)
+    idMap.set(folderId, newRootId)
+
+    const clonedRoot: FSNode = {
+      ...sourceFolder,
+      id: newRootId,
+      name: `${sourceFolder.name} (Copy)`,
+      parentId: targetParentId,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      isTrash: false,
+    }
+
+    this.nodes.set(newRootId, clonedRoot)
+    this.saveNodeToDB(clonedRoot)
+
+    // Gather all descendants
+    const queue: string[] = [folderId]
+    while (queue.length > 0) {
+      const currId = queue.shift()!
+      const parentNewId = idMap.get(currId)!
+
+      for (const child of this.nodes.values()) {
+        if (child.parentId === currId) {
+          const newChildId =
+            (child.type === 'file' ? 'file-' : 'folder-') +
+            Date.now() +
+            '-' +
+            Math.random().toString(36).slice(2, 7)
+          idMap.set(child.id, newChildId)
+
+          const clonedChild: FSNode = {
+            ...child,
+            id: newChildId,
+            parentId: parentNewId,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            isTrash: false,
+          }
+
+          this.nodes.set(newChildId, clonedChild)
+          this.saveNodeToDB(clonedChild)
+
+          if (child.type === 'folder') {
+            queue.push(child.id)
+          }
+        }
+      }
+    }
+
+    this.notify()
+    return clonedRoot
   }
 
   public emptyTrash(): void {
@@ -274,6 +416,10 @@ class VirtualFileSystem {
   public moveNode(id: string, targetParentId: string | null): boolean {
     const node = this.nodes.get(id)
     if (!node) return false
+    // Prevent moving a node into itself or into its own descendant tree
+    if (targetParentId && (targetParentId === id || this.isDescendant(targetParentId, id))) {
+      return false
+    }
     node.parentId = targetParentId
     node.updatedAt = Date.now()
     this.saveNodeToDB(node)
@@ -284,7 +430,10 @@ class VirtualFileSystem {
   public copyNode(id: string, targetParentId: string | null): FSNode | null {
     const node = this.nodes.get(id)
     if (!node) return null
-    const newId = (node.type === 'file' ? 'file-' : 'folder-') + Date.now() + '-' + Math.random().toString(36).slice(2, 7)
+    if (node.type === 'folder') {
+      return this.copyFolderRecursive(id, targetParentId)
+    }
+    const newId = 'file-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7)
     const copy: FSNode = {
       ...node,
       id: newId,
@@ -306,6 +455,117 @@ class VirtualFileSystem {
     return Array.from(this.nodes.values()).filter(
       (n) => !n.isTrash && (n.name.toLowerCase().includes(q) || (n.content && n.content.toLowerCase().includes(q)))
     )
+  }
+
+  public async exportArchive(): Promise<string> {
+    const nodes = Array.from(this.nodes.values()).filter((n) => !n.isTrash)
+    const exportNodes: VFSExportNode[] = []
+
+    for (const node of nodes) {
+      if (node.blob) {
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.readAsDataURL(node.blob!)
+        })
+        const { blob: _, ...rest } = node
+        exportNodes.push({ ...rest, blobBase64: base64 })
+      } else {
+        const { blob: _, ...rest } = node
+        exportNodes.push(rest)
+      }
+    }
+
+    const backup: VFSBackup = {
+      version: 1,
+      exportDate: new Date().toISOString(),
+      nodes: exportNodes,
+    }
+    return JSON.stringify(backup, null, 2)
+  }
+
+  public async importArchive(jsonString: string, mode: 'merge' | 'replace' = 'merge'): Promise<boolean> {
+    try {
+      const backup: VFSBackup = JSON.parse(jsonString)
+      if (!backup || !Array.isArray(backup.nodes)) return false
+
+      if (mode === 'replace') {
+        this.nodes.clear()
+        INITIAL_FILES.forEach((f) => {
+          if (f.isSystem) this.nodes.set(f.id, f)
+        })
+      }
+
+      for (const en of backup.nodes) {
+        let blob: Blob | undefined
+        if (en.blobBase64) {
+          const arr = en.blobBase64.split(',')
+          const mime = arr[0].match(/:(.*?);/)?.[1] || 'application/octet-stream'
+          const bstr = atob(arr[1])
+          let n = bstr.length
+          const u8arr = new Uint8Array(n)
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n)
+          }
+          blob = new Blob([u8arr], { type: mime })
+        }
+
+        const node: FSNode = {
+          id: en.id,
+          name: en.name,
+          type: en.type,
+          parentId: en.parentId,
+          size: en.size,
+          mimeType: en.mimeType,
+          content: en.content,
+          blob,
+          createdAt: en.createdAt || Date.now(),
+          updatedAt: en.updatedAt || Date.now(),
+          isTrash: false,
+        }
+        this.nodes.set(node.id, node)
+        this.saveNodeToDB(node)
+      }
+
+      this.notify()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  public async getStorageStats(): Promise<StorageStats> {
+    let usedBytes = 0
+    let fileCount = 0
+    let folderCount = 0
+
+    for (const node of this.nodes.values()) {
+      if (node.type === 'file') {
+        fileCount++
+        usedBytes += node.size || 0
+      } else {
+        folderCount++
+      }
+    }
+
+    let quotaBytes: number | undefined
+    if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.estimate) {
+      try {
+        const estimate = await navigator.storage.estimate()
+        if (estimate.quota) {
+          quotaBytes = estimate.quota
+        }
+      } catch {
+        // Ignored
+      }
+    }
+
+    return {
+      usedBytes,
+      quotaBytes,
+      fileCount,
+      folderCount,
+    }
   }
 
   public resetToDefault(): void {
