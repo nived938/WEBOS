@@ -11,6 +11,12 @@ import {
   LayoutGrid,
   ArrowRightLeft,
   Sparkles,
+  Columns,
+  Rows,
+  Grid,
+  Layers,
+  Edit2,
+  Trash2,
 } from 'lucide-react'
 
 export const ActivitiesOverview: React.FC = () => {
@@ -25,11 +31,17 @@ export const ActivitiesOverview: React.FC = () => {
     activeWorkspace,
     switchWorkspace,
     createWorkspace,
+    deleteWorkspace,
+    renameWorkspace,
     moveWindowToWorkspace,
+    tileWindows,
+    setWorkspaceLayout,
   } = useWindowManager()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [draggedWinId, setDraggedWinId] = useState<string | null>(null)
+  const [editingWsId, setEditingWsId] = useState<number | null>(null)
+  const [editingWsName, setEditingWsName] = useState('')
 
   // Keyboard shortcut listener for Esc and Super key
   useEffect(() => {
@@ -106,11 +118,12 @@ export const ActivitiesOverview: React.FC = () => {
       </div>
 
       {/* Virtual Desktops Previews Strip */}
-      <div className="w-full max-w-4xl flex flex-col items-center mb-8">
+      <div className="w-full max-w-4xl flex flex-col items-center mb-6">
         <div className="flex items-center gap-3 bg-white/5 border border-white/15 p-2 rounded-2xl backdrop-blur-xl shadow-2xl overflow-x-auto max-w-full">
           {workspaces.map((ws) => {
             const count = windows.filter((w) => (w.workspaceId || 1) === ws.id).length
             const isActive = activeWorkspace === ws.id
+            const isEditing = editingWsId === ws.id
 
             return (
               <div
@@ -121,18 +134,69 @@ export const ActivitiesOverview: React.FC = () => {
                   soundService.playClick()
                   switchWorkspace(ws.id)
                 }}
-                className={`flex flex-col items-center justify-center w-32 h-20 rounded-xl border transition-all duration-200 cursor-pointer relative group flex-shrink-0 ${
+                className={`flex flex-col items-center justify-center w-36 h-20 rounded-xl border transition-all duration-200 cursor-pointer relative group flex-shrink-0 ${
                   isActive
                     ? 'bg-blue-600/30 border-cyan-400/80 ring-2 ring-cyan-500/50 shadow-lg text-white'
                     : 'bg-white/5 border-white/10 hover:bg-white/15 text-neutral-300'
                 }`}
               >
-                <span className="text-xs font-semibold truncate px-2 text-center w-full">
-                  {ws.name}
-                </span>
+                {/* Delete workspace button */}
+                {workspaces.length > 1 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      soundService.playClick()
+                      deleteWorkspace(ws.id)
+                    }}
+                    className="absolute top-1 right-1 p-1 rounded-full text-neutral-400 hover:text-red-400 hover:bg-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Delete Workspace"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editingWsName}
+                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setEditingWsName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        renameWorkspace(ws.id, editingWsName.trim() || ws.name)
+                        setEditingWsId(null)
+                      } else if (e.key === 'Escape') {
+                        setEditingWsId(null)
+                      }
+                    }}
+                    onBlur={() => {
+                      renameWorkspace(ws.id, editingWsName.trim() || ws.name)
+                      setEditingWsId(null)
+                    }}
+                    className="w-28 text-center text-xs bg-black/60 border border-cyan-400 rounded px-1 py-0.5 text-white outline-none"
+                  />
+                ) : (
+                  <div
+                    className="flex items-center gap-1.5 px-2 max-w-full"
+                    onDoubleClick={(e) => {
+                      e.stopPropagation()
+                      setEditingWsId(ws.id)
+                      setEditingWsName(ws.name)
+                    }}
+                    title="Double-click to rename"
+                  >
+                    <span className="text-xs font-semibold truncate text-center">
+                      {ws.name}
+                    </span>
+                    <Edit2 size={10} className="text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                )}
+
                 <span className="text-[10px] text-neutral-400 mt-1 font-mono">
                   {count} {count === 1 ? 'window' : 'windows'}
                 </span>
+
                 {isActive && (
                   <span className="absolute -bottom-1.5 w-10 h-1 rounded-full bg-cyan-400" />
                 )}
@@ -149,6 +213,49 @@ export const ActivitiesOverview: React.FC = () => {
             title="Create New Virtual Desktop"
           >
             <Plus size={18} />
+          </button>
+        </div>
+
+        {/* Workspace Quick Window Tiling Toolbar */}
+        <div className="flex items-center gap-2 mt-3 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-neutral-300 backdrop-blur-md">
+          <span className="text-[11px] text-neutral-400 font-medium mr-1">Tile Windows:</span>
+          <button
+            onClick={() => {
+              soundService.playClick()
+              tileWindows('split-vertical')
+              setWorkspaceLayout(activeWorkspace, 'split-vertical')
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/15 text-neutral-200 transition-colors"
+            title="Tile Left / Right Columns"
+          >
+            <Columns size={13} className="text-cyan-400" />
+            <span>Columns</span>
+          </button>
+
+          <button
+            onClick={() => {
+              soundService.playClick()
+              tileWindows('split-horizontal')
+              setWorkspaceLayout(activeWorkspace, 'split-horizontal')
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/15 text-neutral-200 transition-colors"
+            title="Tile Top / Bottom Rows"
+          >
+            <Rows size={13} className="text-cyan-400" />
+            <span>Rows</span>
+          </button>
+
+          <button
+            onClick={() => {
+              soundService.playClick()
+              tileWindows('grid')
+              setWorkspaceLayout(activeWorkspace, 'grid')
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/15 text-neutral-200 transition-colors"
+            title="Tile 2x2 Grid"
+          >
+            <Grid size={13} className="text-cyan-400" />
+            <span>2x2 Grid</span>
           </button>
         </div>
       </div>

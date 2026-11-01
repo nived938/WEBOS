@@ -4,7 +4,15 @@ import type { AppId } from '@/types'
 import { APPS_REGISTRY } from '@/core/appRegistry/apps.config'
 import { soundService } from '@/core/audio/soundService'
 import { useSettings } from '@/core/settings/SettingsContext'
-import { verifyPin } from '@/core/security/cryptoPin'
+import {
+  verifyPin,
+  getPinLockoutStatus,
+  recordFailedPinAttempt,
+  resetPinRateLimit,
+  verifyRecoveryKey,
+} from '@/core/security/cryptoPin'
+import { sessionManager } from '@/core/system/sessionManager'
+import { userManager } from '@/core/system/userManager'
 
 const WORKSPACES_STORAGE_KEY = 'nova_workspaces_v2'
 
@@ -184,20 +192,29 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const unlockSystem = useCallback(
     async (pin?: string): Promise<boolean> => {
-      // If no PIN required or guest unlock
-      if (!settings.isPinSet || pin === 'guest') {
+      // If PIN is not configured on this device, allow unlocking immediately
+      if (!settings.isPinSet || !settings.pinHash || !settings.pinSalt) {
         soundService.playStartup()
         setIsLocked(false)
         setIsAsleep(false)
         return true
       }
 
-      // If recovery key supplied
-      if (
-        pin &&
-        settings.recoveryKey &&
-        pin.trim().toUpperCase() === settings.recoveryKey.trim().toUpperCase()
-      ) {
+      // Prohibit empty input when PIN is required
+      if (!pin || pin.trim() === '') {
+        return false
+      }
+
+      // Check temporary lockout from repeated failures
+      const lockout = getPinLockoutStatus()
+      if (lockout.isLockedOut) {
+        soundService.playAlert()
+        return false
+      }
+
+      // Check explicit account recovery key
+      if (settings.recoveryKey && verifyRecoveryKey(pin, settings.recoveryKey)) {
+        resetPinRateLimit()
         soundService.playStartup()
         setIsLocked(false)
         setIsAsleep(false)
@@ -205,37 +222,57 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       // Web Crypto PBKDF2 verification against stored hash & salt
-      if (pin && settings.pinHash && settings.pinSalt) {
-        const matches = await verifyPin(pin, settings.pinHash, settings.pinSalt)
-        if (matches) {
-          soundService.playStartup()
-          setIsLocked(false)
-          setIsAsleep(false)
-          return true
-        }
-      }
-
-      // Fallback for default '1234'
-      if (pin === '1234' || pin === settings.lockPin) {
+      const matches = await verifyPin(pin, settings.pinHash, settings.pinSalt)
+      if (matches) {
+        resetPinRateLimit()
         soundService.playStartup()
         setIsLocked(false)
         setIsAsleep(false)
         return true
       }
 
+      // Authentication failed: record attempt for rate limiting
+      recordFailedPinAttempt()
+      soundService.playAlert()
       return false
     },
-    [settings.isPinSet, settings.pinHash, settings.pinSalt, settings.lockPin, settings.recoveryKey]
+    [settings.isPinSet, settings.pinHash, settings.pinSalt, settings.recoveryKey]
   )
+
+  // Helper to persist session state
+  const persistCurrentSession = useCallback(() => {
+    try {
+      const activeProfile = userManager.getActiveProfile()
+      sessionManager.saveSession({
+        timestamp: Date.now(),
+        profileId: activeProfile.id,
+        activeWorkspace,
+        windows: windows.map((w) => ({
+          appId: w.appId,
+          title: w.title,
+          x: w.x,
+          y: w.y,
+          width: w.width,
+          height: w.height,
+          isMinimized: w.isMinimized,
+          isMaximized: w.isMaximized,
+          workspaceId: w.workspaceId,
+        })),
+      })
+    } catch {
+      // Ignore
+    }
+  }, [activeWorkspace, windows])
 
   // Virtual Power Management (Sleep, Restart, Power Off)
   const sleepSystem = useCallback(() => {
     soundService.playClick()
+    persistCurrentSession()
     setIsAsleep(true)
     setIsLocked(true)
     setIsOverviewOpen(false)
     setIsLauncherOpen(false)
-  }, [])
+  }, [persistCurrentSession])
 
   const wakeSystem = useCallback(() => {
     soundService.playClick()
@@ -244,12 +281,13 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const powerOffSystem = useCallback(() => {
     soundService.playClick()
+    persistCurrentSession()
     setIsShutDown(true)
     setIsLocked(false)
     setIsAsleep(false)
     setIsOverviewOpen(false)
     setIsLauncherOpen(false)
-  }, [])
+  }, [persistCurrentSession])
 
   const powerOnSystem = useCallback(() => {
     soundService.playStartup()
@@ -260,20 +298,52 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
   // Boot & Reboot
   const rebootSystem = useCallback(() => {
     soundService.playStartup()
+    persistCurrentSession()
     setIsBooting(true)
     setIsLocked(false)
     setIsAsleep(false)
     setIsShutDown(false)
     setIsOverviewOpen(false)
     setIsLauncherOpen(false)
-  }, [])
+  }, [persistCurrentSession])
 
   const completeBoot = useCallback(() => {
     setIsBooting(false)
-    if (settings.lockScreenEnabled) {
+    if (settings.lockScreenEnabled && settings.isPinSet) {
       setIsLocked(true)
     }
-  }, [settings.lockScreenEnabled])
+
+    // Restore desktop session if configured
+    if (sessionManager.getRestoreMode() === 'always') {
+      const activeProfile = userManager.getActiveProfile()
+      const saved = sessionManager.getSession(activeProfile.id)
+      if (saved && saved.windows && saved.windows.length > 0) {
+        const restoredWindows: WindowState[] = saved.windows.map((sw, idx) => {
+          const appDef = APPS_REGISTRY[sw.appId]
+          return {
+            id: `win-restore-${Date.now()}-${idx}`,
+            appId: sw.appId,
+            title: sw.title || appDef?.title || 'Application',
+            x: sw.x,
+            y: sw.y,
+            width: sw.width,
+            height: sw.height,
+            minWidth: appDef?.minWidth || 300,
+            minHeight: appDef?.minHeight || 200,
+            isMinimized: sw.isMinimized,
+            isMaximized: sw.isMaximized,
+            isFocused: idx === saved.windows.length - 1,
+            zIndex: 10 + idx,
+            workspaceId: sw.workspaceId || 1,
+          }
+        })
+        setWindows(restoredWindows)
+        if (saved.activeWorkspace) {
+          setActiveWorkspace(saved.activeWorkspace)
+        }
+      }
+    }
+  }, [settings.lockScreenEnabled, settings.isPinSet])
 
   // Open an app window
   const openApp = useCallback(
@@ -496,6 +566,58 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
           }
         }
 
+        if (snap === 'top-left') {
+          return {
+            ...w,
+            prevBounds,
+            x: 0,
+            y: menuBarH,
+            width: Math.floor(screenW / 2),
+            height: Math.floor(usableH / 2),
+            isMaximized: false,
+            snapPosition: 'top-left',
+          }
+        }
+
+        if (snap === 'top-right') {
+          return {
+            ...w,
+            prevBounds,
+            x: Math.floor(screenW / 2),
+            y: menuBarH,
+            width: Math.ceil(screenW / 2),
+            height: Math.floor(usableH / 2),
+            isMaximized: false,
+            snapPosition: 'top-right',
+          }
+        }
+
+        if (snap === 'bottom-left') {
+          return {
+            ...w,
+            prevBounds,
+            x: 0,
+            y: menuBarH + Math.floor(usableH / 2),
+            width: Math.floor(screenW / 2),
+            height: Math.ceil(usableH / 2),
+            isMaximized: false,
+            snapPosition: 'bottom-left',
+          }
+        }
+
+        if (snap === 'bottom-right') {
+          return {
+            ...w,
+            prevBounds,
+            x: Math.floor(screenW / 2),
+            y: menuBarH + Math.floor(usableH / 2),
+            width: Math.ceil(screenW / 2),
+            height: Math.ceil(usableH / 2),
+            isMaximized: false,
+            snapPosition: 'bottom-right',
+          }
+        }
+
         return w
       })
     )
@@ -536,6 +658,140 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [activeWindowId, toggleMaximize])
 
+  const tileWindows = useCallback(
+    (layout: 'split-vertical' | 'split-horizontal' | 'grid' = 'split-vertical') => {
+      soundService.playClick()
+      const screenW = window.innerWidth || 1280
+      const screenH = window.innerHeight || 800
+      const menuBarH = 32
+      const dockH = 75
+      const usableH = screenH - menuBarH - dockH
+
+      setWindows((prev) => {
+        const activeWindows = prev.filter((w) => w.workspaceId === activeWorkspace && !w.isMinimized)
+        if (activeWindows.length === 0) return prev
+
+        if (layout === 'split-vertical' || (layout === 'grid' && activeWindows.length === 2)) {
+          const colW = Math.floor(screenW / activeWindows.length)
+          return prev.map((w) => {
+            const idx = activeWindows.findIndex((aw) => aw.id === w.id)
+            if (idx === -1) return w
+            return {
+              ...w,
+              x: idx * colW,
+              y: menuBarH,
+              width: colW,
+              height: usableH,
+              isMaximized: false,
+              snapPosition: 'none',
+            }
+          })
+        }
+
+        if (layout === 'split-horizontal') {
+          const rowH = Math.floor(usableH / activeWindows.length)
+          return prev.map((w) => {
+            const idx = activeWindows.findIndex((aw) => aw.id === w.id)
+            if (idx === -1) return w
+            return {
+              ...w,
+              x: 0,
+              y: menuBarH + idx * rowH,
+              width: screenW,
+              height: rowH,
+              isMaximized: false,
+              snapPosition: 'none',
+            }
+          })
+        }
+
+        if (layout === 'grid') {
+          const cols = Math.ceil(Math.sqrt(activeWindows.length))
+          const rows = Math.ceil(activeWindows.length / cols)
+          const cellW = Math.floor(screenW / cols)
+          const cellH = Math.floor(usableH / rows)
+
+          return prev.map((w) => {
+            const idx = activeWindows.findIndex((aw) => aw.id === w.id)
+            if (idx === -1) return w
+            const col = idx % cols
+            const row = Math.floor(idx / cols)
+            return {
+              ...w,
+              x: col * cellW,
+              y: menuBarH + row * cellH,
+              width: cellW,
+              height: cellH,
+              isMaximized: false,
+              snapPosition: 'none',
+            }
+          })
+        }
+
+        return prev
+      })
+    },
+    [activeWorkspace]
+  )
+
+  const setWorkspaceWallpaper = useCallback((workspaceId: number, wallpaperId: string) => {
+    soundService.playClick()
+    setWorkspaces((prev) =>
+      prev.map((ws) => (ws.id === workspaceId ? { ...ws, wallpaperId } : ws))
+    )
+  }, [])
+
+  const setWorkspaceLayout = useCallback(
+    (workspaceId: number, layout: 'floating' | 'split-vertical' | 'split-horizontal' | 'grid') => {
+      soundService.playClick()
+      setWorkspaces((prev) =>
+        prev.map((ws) => (ws.id === workspaceId ? { ...ws, layout } : ws))
+      )
+      if (layout !== 'floating') {
+        tileWindows(layout)
+      }
+    },
+    [tileWindows]
+  )
+
+  // Clamp windows inside viewport on resize
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handleResize = () => {
+      const screenW = window.innerWidth
+      const screenH = window.innerHeight
+      const menuBarH = 32
+      const dockH = 75
+
+      setWindows((prev) =>
+        prev.map((w) => {
+          if (w.isMaximized) {
+            return {
+              ...w,
+              x: 0,
+              y: menuBarH,
+              width: screenW,
+              height: screenH - menuBarH - dockH,
+            }
+          }
+          const maxX = Math.max(0, screenW - 120)
+          const maxY = Math.max(menuBarH, screenH - dockH - 40)
+          const clampedX = Math.max(0, Math.min(maxX, w.x))
+          const clampedY = Math.max(menuBarH, Math.min(maxY, w.y))
+          return {
+            ...w,
+            x: clampedX,
+            y: clampedY,
+          }
+        })
+      )
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   const activeWindow = windows.find((w) => w.id === activeWindowId) || null
   const runningAppIds = Array.from(new Set(windows.map((w) => w.appId)))
 
@@ -553,6 +809,7 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
         focusWindow,
         updateWindowBounds,
         snapWindow,
+        tileWindows,
         closeActiveWindow,
         minimizeActiveWindow,
         toggleMaximizeActiveWindow,
@@ -564,6 +821,8 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
         renameWorkspace,
         deleteWorkspace,
         reorderWorkspaces,
+        setWorkspaceWallpaper,
+        setWorkspaceLayout,
         isOverviewOpen,
         toggleOverview,
         isLauncherOpen,

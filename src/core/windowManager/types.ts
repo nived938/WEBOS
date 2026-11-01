@@ -7,7 +7,15 @@ export interface WindowBounds {
   height: number
 }
 
-export type SnapPosition = 'left' | 'right' | 'top' | 'none'
+export type SnapPosition =
+  | 'left'
+  | 'right'
+  | 'top'
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right'
+  | 'none'
 
 export interface WindowState {
   id: string
@@ -32,6 +40,8 @@ export interface WindowState {
 export interface WorkspaceDef {
   id: number
   name: string
+  wallpaperId?: string
+  layout?: 'floating' | 'split-vertical' | 'split-horizontal' | 'grid'
 }
 
 export interface WindowManagerContextType {
@@ -46,6 +56,7 @@ export interface WindowManagerContextType {
   focusWindow: (id: string) => void
   updateWindowBounds: (id: string, bounds: Partial<WindowBounds>) => void
   snapWindow: (id: string, snap: SnapPosition) => void
+  tileWindows: (layout?: 'split-vertical' | 'split-horizontal' | 'grid') => void
   closeActiveWindow: () => void
   minimizeActiveWindow: () => void
   toggleMaximizeActiveWindow: () => void
@@ -54,10 +65,12 @@ export interface WindowManagerContextType {
   activeWorkspace: number
   switchWorkspace: (workspaceId: number) => void
   moveWindowToWorkspace: (windowId: string, workspaceId: number) => void
-  createWorkspace: (name: string) => void
+  createWorkspace: (name?: string) => number
   renameWorkspace: (id: number, name: string) => void
   deleteWorkspace: (id: number) => void
   reorderWorkspaces: (workspaces: WorkspaceDef[] | number[]) => void
+  setWorkspaceWallpaper: (workspaceId: number, wallpaperId: string) => void
+  setWorkspaceLayout: (workspaceId: number, layout: 'floating' | 'split-vertical' | 'split-horizontal' | 'grid') => void
   // Mission Control & Multitasking Overview
   isOverviewOpen: boolean
   toggleOverview: (open?: boolean) => void

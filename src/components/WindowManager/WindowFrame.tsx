@@ -97,12 +97,24 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ windowState }) => {
 
     updateWindowBounds(windowState.id, { x: clampedX, y: clampedY })
 
-    // Edge snap detection
-    if (e.clientX < 20) {
-      setSnapPreview('left')
-    } else if (e.clientX > screenW - 20) {
-      setSnapPreview('right')
-    } else if (e.clientY < 35) {
+    // Edge & Corner snap detection
+    if (e.clientX < 24) {
+      if (e.clientY < screenH * 0.35) {
+        setSnapPreview('top-left')
+      } else if (e.clientY > screenH * 0.65) {
+        setSnapPreview('bottom-left')
+      } else {
+        setSnapPreview('left')
+      }
+    } else if (e.clientX > screenW - 24) {
+      if (e.clientY < screenH * 0.35) {
+        setSnapPreview('top-right')
+      } else if (e.clientY > screenH * 0.65) {
+        setSnapPreview('bottom-right')
+      } else {
+        setSnapPreview('right')
+      }
+    } else if (e.clientY < 36) {
       setSnapPreview('top')
     } else {
       setSnapPreview('none')
@@ -207,12 +219,20 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ windowState }) => {
       {/* Snap Preview Ghost Box */}
       {snapPreview !== 'none' && (
         <div
-          className={`fixed pointer-events-none z-50 bg-blue-500/20 border-2 border-blue-400/60 backdrop-blur-sm rounded-2xl transition-all duration-150 ${
+          className={`fixed pointer-events-none z-50 bg-cyan-500/20 border-2 border-cyan-400/70 backdrop-blur-md rounded-2xl shadow-2xl shadow-cyan-500/20 transition-all duration-150 ${
             snapPreview === 'left'
               ? 'top-[32px] left-2 w-[calc(50vw-12px)] h-[calc(100vh-112px)]'
               : snapPreview === 'right'
               ? 'top-[32px] right-2 w-[calc(50vw-12px)] h-[calc(100vh-112px)]'
-              : 'top-[32px] left-2 right-2 h-[calc(100vh-112px)]'
+              : snapPreview === 'top'
+              ? 'top-[32px] left-2 right-2 h-[calc(100vh-112px)]'
+              : snapPreview === 'top-left'
+              ? 'top-[32px] left-2 w-[calc(50vw-12px)] h-[calc(50vh-56px)]'
+              : snapPreview === 'top-right'
+              ? 'top-[32px] right-2 w-[calc(50vw-12px)] h-[calc(50vh-56px)]'
+              : snapPreview === 'bottom-left'
+              ? 'top-[calc(50vh-24px)] left-2 w-[calc(50vw-12px)] h-[calc(50vh-56px)]'
+              : 'top-[calc(50vh-24px)] right-2 w-[calc(50vw-12px)] h-[calc(50vh-56px)]'
           }`}
         />
       )}

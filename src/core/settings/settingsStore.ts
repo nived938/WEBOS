@@ -27,8 +27,8 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   performanceMode: 'high',
   nightLight: false,
   nightLightTemperature: 45,
-  lockScreenEnabled: true,
-  lockPin: '1234',
+  lockScreenEnabled: false,
+  lockPin: undefined,
   username: 'Commander Nova',
   bootAnimation: true,
   activeWorkspace: 1,
@@ -40,10 +40,10 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   userBio: 'Cosmic Navigator & System Architect',
   userGreeting: 'Welcome back to NOVA OS',
   profileAccentColor: 'blue',
-  pinHash: 'zCmGySHLDbMjVX0mmBE7glaztl6f0OcUBD5e0Vt54bA=', // PBKDF2 hash of default PIN 1234
-  pinSalt: 'bm92YS1kZWZhdWx0LXNhbHQ=',
-  isPinSet: true,
-  recoveryKey: 'NOVA-8492-7201-9482',
+  pinHash: undefined,
+  pinSalt: undefined,
+  isPinSet: false,
+  recoveryKey: undefined,
   autoLockTimeout: 5,
   immersiveModeEnabled: false,
   // Extended Personalization Subsystems
@@ -189,10 +189,28 @@ export function migrateSettings(savedData: unknown): SystemSettings {
     lockWallpaperType: ['gradient', 'dynamic', 'custom', 'animated'].includes(raw.lockWallpaperType as any)
       ? raw.lockWallpaperType!
       : DEFAULT_SETTINGS.lockWallpaperType,
-    // Fallback cryptographic credentials if missing
-    pinHash: raw.pinHash || DEFAULT_SETTINGS.pinHash,
-    pinSalt: raw.pinSalt || DEFAULT_SETTINGS.pinSalt,
-    recoveryKey: raw.recoveryKey || DEFAULT_SETTINGS.recoveryKey,
+    // Security: Eradicate default '1234' PIN bypass and sanitize plaintext credentials
+    pinHash:
+      raw.pinHash === 'zCmGySHLDbMjVX0mmBE7glaztl6f0OcUBD5e0Vt54bA=' || raw.lockPin === '1234'
+        ? undefined
+        : raw.pinHash,
+    pinSalt:
+      raw.pinHash === 'zCmGySHLDbMjVX0mmBE7glaztl6f0OcUBD5e0Vt54bA=' || raw.lockPin === '1234'
+        ? undefined
+        : raw.pinSalt,
+    recoveryKey:
+      raw.pinHash === 'zCmGySHLDbMjVX0mmBE7glaztl6f0OcUBD5e0Vt54bA=' || raw.lockPin === '1234'
+        ? undefined
+        : raw.recoveryKey,
+    isPinSet:
+      raw.pinHash === 'zCmGySHLDbMjVX0mmBE7glaztl6f0OcUBD5e0Vt54bA=' || raw.lockPin === '1234'
+        ? false
+        : Boolean(raw.isPinSet && raw.pinHash && raw.pinSalt),
+    lockScreenEnabled:
+      raw.pinHash === 'zCmGySHLDbMjVX0mmBE7glaztl6f0OcUBD5e0Vt54bA=' || raw.lockPin === '1234'
+        ? false
+        : Boolean(raw.lockScreenEnabled && raw.isPinSet),
+    lockPin: undefined, // Never store plaintext PIN
     // Ensure sub-objects merge safely
     liquidGlass: {
       ...DEFAULT_SETTINGS.liquidGlass,

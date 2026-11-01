@@ -373,7 +373,7 @@ export interface SystemSettings {
   nightLight: boolean
   nightLightTemperature: number
   lockScreenEnabled: boolean
-  lockPin: string
+  lockPin?: string // Deprecated: Plaintext PIN storage is prohibited. Use PBKDF2 pinHash/pinSalt.
   username: string
   bootAnimation: boolean
   activeWorkspace: number

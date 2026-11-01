@@ -5,11 +5,16 @@ import { useNotifications } from '@/core/notifications/NotificationContext'
 import { soundService } from '@/core/audio/soundService'
 import { WALLPAPERS } from '@/core/settings/wallpapers'
 import {
+  getPinLockoutStatus,
+  verifyRecoveryKey,
+  MAX_ATTEMPTS_BEFORE_LOCKOUT,
+} from '@/core/security/cryptoPin'
+import {
   User,
   Lock,
   ArrowRight,
+  ShieldAlert,
   ShieldCheck,
-  KeyRound,
   Eye,
   EyeOff,
   Wifi,
@@ -21,7 +26,7 @@ import {
   Compass,
   Bot,
   HelpCircle,
-  RotateCcw,
+  AlertTriangle,
 } from 'lucide-react'
 
 export const LockScreen: React.FC = () => {
@@ -39,21 +44,27 @@ export const LockScreen: React.FC = () => {
   const [recoveryInput, setRecoveryInput] = useState('')
   const [recoveryError, setRecoveryError] = useState(false)
 
+  // Rate Limiting & Lockout
+  const [lockout, setLockout] = useState(() => getPinLockoutStatus())
   const [currentTime, setCurrentTime] = useState(new Date())
   const pinInputRef = useRef<HTMLInputElement>(null)
 
-  // Clock updater
+  // Clock updater & Lockout countdown timer
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
+    const timer = setInterval(() => {
+      setCurrentTime(new Date())
+      const currentLockout = getPinLockoutStatus()
+      setLockout(currentLockout)
+    }, 1000)
     return () => clearInterval(timer)
   }, [])
 
   // Auto focus PIN input when revealed
   useEffect(() => {
-    if (isPromptRevealed && !showRecoveryModal) {
+    if (isPromptRevealed && !showRecoveryModal && !lockout.isLockedOut) {
       setTimeout(() => pinInputRef.current?.focus(), 100)
     }
-  }, [isPromptRevealed, showRecoveryModal])
+  }, [isPromptRevealed, showRecoveryModal, lockout.isLockedOut])
 
   // Reset state when screen is locked
   useEffect(() => {
@@ -63,6 +74,7 @@ export const LockScreen: React.FC = () => {
       setIsUnlockedSuccess(false)
       setShowRecoveryModal(false)
       setRecoveryInput('')
+      setLockout(getPinLockoutStatus())
       // If no PIN is configured, reveal prompt immediately
       if (!settings.isPinSet) {
         setIsPromptRevealed(true)
@@ -117,6 +129,16 @@ export const LockScreen: React.FC = () => {
 
   const handleUnlock = async (e?: React.FormEvent) => {
     e?.preventDefault()
+
+    // Enforce rate limiting check
+    if (lockout.isLockedOut) {
+      soundService.playAlert()
+      setError(true)
+      setErrorMessage(`Too many failed attempts. Wait ${lockout.remainingSeconds}s.`)
+      setTimeout(() => setError(false), 1200)
+      return
+    }
+
     if (!pin && settings.isPinSet) {
       setError(true)
       setErrorMessage('Please enter your PIN')
@@ -133,35 +155,55 @@ export const LockScreen: React.FC = () => {
         setIsUnlockedSuccess(false)
       }, 400)
     } else {
-      soundService.playAlert()
+      const updatedLockout = getPinLockoutStatus()
+      setLockout(updatedLockout)
       setError(true)
-      setErrorMessage('Incorrect PIN. (Default: 1234)')
-      setTimeout(() => setError(false), 800)
+      if (updatedLockout.isLockedOut) {
+        setErrorMessage(`Too many attempts. Lockout active for ${updatedLockout.remainingSeconds}s.`)
+      } else {
+        const remaining = MAX_ATTEMPTS_BEFORE_LOCKOUT - updatedLockout.failedAttempts
+        setErrorMessage(
+          remaining > 0
+            ? `Incorrect PIN. (${remaining} attempt${remaining === 1 ? '' : 's'} remaining)`
+            : 'Incorrect PIN.'
+        )
+      }
+      setTimeout(() => setError(false), 1500)
     }
   }
 
-  const handleQuickUnlock = async () => {
-    await unlockSystem('guest')
-    setPin('')
-    setError(false)
+  const handleUnlockWithoutPin = async () => {
+    if (!settings.isPinSet) {
+      await unlockSystem()
+    }
   }
 
   const handleRecoverySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const targetKey = settings.recoveryKey || 'NOVA-1234-RECOVER'
-    if (recoveryInput.trim().toUpperCase() === targetKey.trim().toUpperCase()) {
+    if (!settings.recoveryKey) {
+      setRecoveryError(true)
+      return
+    }
+
+    const isValid = verifyRecoveryKey(recoveryInput, settings.recoveryKey)
+    if (isValid) {
       soundService.playStartup()
+      // Wipe the forgotten credentials safely so user can configure a new PIN
       updateSettings({
         isPinSet: false,
-        lockPin: '1234',
+        lockScreenEnabled: false,
+        pinHash: undefined,
+        pinSalt: undefined,
+        recoveryKey: undefined,
+        lockPin: undefined,
       })
-      await unlockSystem('guest')
+      await unlockSystem()
       setShowRecoveryModal(false)
       setRecoveryInput('')
     } else {
       soundService.playAlert()
       setRecoveryError(true)
-      setTimeout(() => setRecoveryError(false), 800)
+      setTimeout(() => setRecoveryError(false), 1200)
     }
   }
 
@@ -204,7 +246,7 @@ export const LockScreen: React.FC = () => {
       }`}
     >
       {/* Liquid Glass Ambient Backdrop Blur */}
-      <div className="absolute inset-0 bg-neutral-950/45 backdrop-blur-2xl -z-10" />
+      <div className="absolute inset-0 bg-neutral-950/50 backdrop-blur-2xl -z-10" />
 
       {/* Top Status Bar */}
       <div className="w-full flex items-center justify-between text-xs text-white/80 font-medium z-10 px-2">
@@ -303,12 +345,27 @@ export const LockScreen: React.FC = () => {
               </p>
             )}
 
+            {/* Lockout Notification Card */}
+            {lockout.isLockedOut && (
+              <div className="mt-4 px-4 py-3 rounded-2xl bg-red-950/80 border border-red-500/40 text-center flex items-center gap-2.5 animate-pulse">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                <div className="text-left">
+                  <p className="text-xs font-semibold text-red-300">Authentication Rate Limit Active</p>
+                  <p className="text-[11px] text-red-200/80">
+                    Temporarily locked for {lockout.remainingSeconds}s due to repeated failures.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* PIN Entry Form */}
             {settings.isPinSet ? (
-              <form onSubmit={handleUnlock} className="w-full flex flex-col items-center gap-2.5 mt-5">
+              <form onSubmit={handleUnlock} className="w-full flex flex-col items-center gap-2.5 mt-4">
                 <div
                   className={`relative flex items-center w-64 bg-white/10 dark:bg-neutral-900/80 border rounded-2xl px-3.5 py-2.5 backdrop-blur-xl transition-all duration-200 ${
-                    error
+                    lockout.isLockedOut
+                      ? 'border-red-500/50 opacity-50 cursor-not-allowed'
+                      : error
                       ? 'border-red-500 ring-2 ring-red-500/30 animate-shake'
                       : isUnlockedSuccess
                       ? 'border-emerald-400 ring-2 ring-emerald-400/40'
@@ -317,19 +374,21 @@ export const LockScreen: React.FC = () => {
                 >
                   <input
                     ref={pinInputRef}
+                    disabled={lockout.isLockedOut}
                     type={showPin ? 'text' : 'password'}
-                    maxLength={12}
-                    placeholder="Enter Security PIN..."
+                    maxLength={32}
+                    placeholder={lockout.isLockedOut ? 'Locked Out' : 'Enter Security PIN...'}
                     value={pin}
                     onChange={(e) => setPin(e.target.value)}
-                    className="bg-transparent border-none text-white text-center tracking-[0.2em] text-sm placeholder:tracking-normal placeholder:text-neutral-400 placeholder:text-xs focus:outline-none w-full font-mono"
+                    className="bg-transparent border-none text-white text-center tracking-[0.2em] text-sm placeholder:tracking-normal placeholder:text-neutral-400 placeholder:text-xs focus:outline-none w-full font-mono disabled:cursor-not-allowed"
                   />
 
                   {/* Show / Hide PIN Toggle */}
                   <button
                     type="button"
+                    disabled={lockout.isLockedOut}
                     onClick={() => setShowPin(!showPin)}
-                    className="p-1 text-neutral-400 hover:text-white transition-colors ml-1"
+                    className="p-1 text-neutral-400 hover:text-white transition-colors ml-1 disabled:opacity-30"
                     title={showPin ? 'Hide PIN' : 'Show PIN'}
                   >
                     {showPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -338,7 +397,8 @@ export const LockScreen: React.FC = () => {
                   {/* Submit Button */}
                   <button
                     type="submit"
-                    className="p-1 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-neutral-950 transition-colors ml-1 shadow-sm"
+                    disabled={lockout.isLockedOut}
+                    className="p-1 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-neutral-950 transition-colors ml-1 shadow-sm disabled:opacity-30 disabled:cursor-not-allowed"
                     title="Unlock Session"
                   >
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -346,40 +406,32 @@ export const LockScreen: React.FC = () => {
                 </div>
 
                 {error && (
-                  <span className="text-xs text-red-400 font-medium">{errorMessage}</span>
+                  <span className="text-xs text-red-400 font-medium text-center">{errorMessage}</span>
                 )}
 
-                {/* Quick Unlock & Recovery Links */}
+                {/* Account Recovery Link */}
                 <div className="flex items-center gap-3 mt-1.5">
                   <button
                     type="button"
-                    onClick={handleQuickUnlock}
-                    className="flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
-                  >
-                    <KeyRound className="w-3.5 h-3.5" />
-                    Guest Unlock (1234)
-                  </button>
-
-                  <span className="text-neutral-600">•</span>
-
-                  <button
-                    type="button"
                     onClick={() => setShowRecoveryModal(true)}
-                    className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-neutral-200 transition-colors"
+                    className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-cyan-300 transition-colors"
                   >
                     <HelpCircle className="w-3.5 h-3.5" />
-                    Forgot PIN?
+                    Reset with Recovery Key
                   </button>
                 </div>
               </form>
             ) : (
-              /* No PIN Needed: Direct Continue */
-              <div className="mt-5">
+              /* No PIN Needed: Direct Continue with Guidance */
+              <div className="mt-5 flex flex-col items-center gap-3 text-center">
+                <p className="text-[11px] text-neutral-400 max-w-[260px] leading-relaxed">
+                  PIN security is currently disabled. Configure a personal PIN in System Settings to shield your desktop.
+                </p>
                 <button
-                  onClick={handleQuickUnlock}
+                  onClick={handleUnlockWithoutPin}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-neutral-950 font-semibold text-sm shadow-lg shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95"
                 >
-                  <span>Continue to Desktop</span>
+                  <span>Enter Desktop</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -392,29 +444,29 @@ export const LockScreen: React.FC = () => {
       {showRecoveryModal && (
         <div
           onClick={() => setShowRecoveryModal(false)}
-          className="fixed inset-0 z-[9995] bg-black/70 backdrop-blur-2xl flex items-center justify-center p-4 animate-fadeIn"
+          className="fixed inset-0 z-[9995] bg-black/75 backdrop-blur-2xl flex items-center justify-center p-4 animate-fadeIn"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-neutral-900/90 border border-white/20 rounded-3xl p-6 shadow-2xl flex flex-col gap-4 text-white"
+            className="w-full max-w-md bg-neutral-900/95 border border-white/20 rounded-3xl p-6 shadow-2xl flex flex-col gap-4 text-white"
           >
             <div className="flex items-center gap-2.5 text-cyan-400">
               <ShieldCheck className="w-6 h-6" />
-              <h3 className="text-base font-bold">Lock Screen Recovery</h3>
+              <h3 className="text-base font-bold">Privacy Lock Recovery</h3>
             </div>
 
             <p className="text-xs text-neutral-300 leading-relaxed">
-              Enter your emergency recovery key to bypass the lock screen and reset your security PIN.
+              Enter your emergency recovery key to verify your session and reset your local PIN hash.
             </p>
 
-            <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-xs">
-              <span className="text-neutral-400 text-[11px] block mb-1">Default Recovery Key:</span>
-              <span className="font-mono text-cyan-300 font-semibold select-all">
-                {settings.recoveryKey || 'NOVA-8492-7201-9482'}
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-200/90 leading-relaxed flex items-start gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <span>
+                <strong>Browser Privacy Notice:</strong> This recovery reset applies to this local browser session. It is not hardware encryption and does not replace Windows account security.
               </span>
             </div>
 
-            <form onSubmit={handleRecoverySubmit} className="flex flex-col gap-3">
+            <form onSubmit={handleRecoverySubmit} className="flex flex-col gap-3 mt-1">
               <input
                 type="text"
                 placeholder="NOVA-XXXX-XXXX-XXXX"
@@ -442,7 +494,7 @@ export const LockScreen: React.FC = () => {
                   type="submit"
                   className="px-4 py-2 rounded-xl text-xs font-semibold bg-cyan-500 hover:bg-cyan-400 text-neutral-950 transition"
                 >
-                  Verify & Unlock
+                  Verify & Reset PIN
                 </button>
               </div>
             </form>
@@ -450,11 +502,11 @@ export const LockScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Footer Info & Privacy Gate Notice */}
+      {/* Footer Info & Honest Privacy Notice */}
       <div className="text-[11px] text-neutral-400/80 tracking-wider text-center z-10 flex flex-col sm:flex-row items-center gap-1 sm:gap-3">
-        <span>NOVA OS • Client-Side Privacy Gate</span>
+        <span>NOVA OS • Client-Side Privacy Shield</span>
         <span className="hidden sm:inline">•</span>
-        <span>Local Browser Protected Session</span>
+        <span>Local Browser Session Lock</span>
       </div>
     </div>
   )

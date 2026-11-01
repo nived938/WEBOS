@@ -27,13 +27,14 @@ describe('settingsStore - migrateSettings', () => {
     expect(migrated.dockSize).toBe('large')
     expect(migrated.volume).toBe(0.5)
 
-    // New values properly defaulted
+    // New values properly defaulted with secure PIN policy
     expect(migrated.cursorStyle).toBe('default')
     expect(migrated.performanceMode).toBe('high')
     expect(migrated.nightLight).toBe(false)
     expect(migrated.nightLightTemperature).toBe(45)
-    expect(migrated.lockScreenEnabled).toBe(true)
-    expect(migrated.lockPin).toBe('1234')
+    expect(migrated.lockScreenEnabled).toBe(false)
+    expect(migrated.isPinSet).toBe(false)
+    expect(migrated.lockPin).toBeUndefined()
   })
 
   it('sanitizes invalid values and falls back safely', () => {
@@ -54,5 +55,22 @@ describe('settingsStore - migrateSettings', () => {
     expect(migrated.nightLightTemperature).toBe(100) // clamped to max 100
     expect(migrated.cursorStyle).toBe('default') // defaulted
     expect(migrated.performanceMode).toBe('high') // defaulted
+  })
+
+  it('eradicates old default 1234 PIN and plaintext credentials during migration', () => {
+    const insecureLegacySettings = {
+      lockPin: '1234',
+      isPinSet: true,
+      lockScreenEnabled: true,
+      pinHash: 'zCmGySHLDbMjVX0mmBE7glaztl6f0OcUBD5e0Vt54bA=', // old 1234 hash
+    }
+
+    const migrated = migrateSettings(insecureLegacySettings)
+
+    expect(migrated.lockPin).toBeUndefined()
+    expect(migrated.pinHash).toBeUndefined()
+    expect(migrated.pinSalt).toBeUndefined()
+    expect(migrated.isPinSet).toBe(false)
+    expect(migrated.lockScreenEnabled).toBe(false)
   })
 })
