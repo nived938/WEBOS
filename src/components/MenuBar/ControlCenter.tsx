@@ -18,6 +18,8 @@ import {
   MousePointer2,
   Lock,
   Clock,
+  Sparkles,
+  Activity,
 } from 'lucide-react'
 
 interface ControlCenterProps {
@@ -265,7 +267,33 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({ isOpen, onClose })
       </button>
 
       {/* Quick Lock, Sleep & Capture Action Row */}
-      <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-white/10">
+      <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-white/10">
+        <button
+          onClick={() => {
+            soundService.playClick()
+            onClose()
+            openApp('nova_ai')
+          }}
+          className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/20 transition"
+          title="NOVA AI"
+        >
+          <Sparkles size={12} className="text-cyan-400" />
+          <span className="font-medium text-[10px]">AI</span>
+        </button>
+
+        <button
+          onClick={() => {
+            soundService.playClick()
+            onClose()
+            openApp('systemmonitor')
+          }}
+          className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition"
+          title="System Monitor"
+        >
+          <Activity size={12} className="text-emerald-400" />
+          <span className="font-medium text-[10px]">Monitor</span>
+        </button>
+
         <button
           onClick={() => {
             soundService.playClick()
@@ -277,19 +305,6 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({ isOpen, onClose })
         >
           <Lock size={12} className="text-cyan-400" />
           <span className="font-medium text-[10px]">Lock</span>
-        </button>
-
-        <button
-          onClick={() => {
-            soundService.playClick()
-            onClose()
-            openApp('screenrecorder')
-          }}
-          className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition"
-          title="Record Screen"
-        >
-          <Zap size={12} className="text-red-400" />
-          <span className="font-medium text-[10px]">Record</span>
         </button>
 
         <button

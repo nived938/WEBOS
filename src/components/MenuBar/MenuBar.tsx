@@ -633,6 +633,18 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onOpenSpotlight }) => {
           )}
         </div>
 
+        {/* NOVA AI Assistant Global Shortcut */}
+        <button
+          onClick={() => {
+            soundService.playClick()
+            openApp('nova_ai')
+          }}
+          className="p-1 rounded-lg hover:bg-white/10 text-cyan-400 hover:text-cyan-300 transition group relative"
+          title="NOVA AI Assistant (Alt + Space)"
+        >
+          <Sparkles size={14} className="group-hover:animate-pulse" />
+        </button>
+
         {/* Spotlight Search Icon */}
         <button
           onClick={() => {

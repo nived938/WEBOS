@@ -65,3 +65,12 @@ When using Antigravity subagents for NOVA OS tasks:
 - **Zero Black Screen Invariants:** Every wallpaper and theme must provide an explicit fallback background color (`fallbackColor`).
 - **Resilient Web Browsing:** Built-in web navigation must intelligently distinguish direct URLs from search queries and supply rich in-app fallback SERP results when target sites block iframes via CSP.
 - **Native-Class 3D Gaming:** 3D games must use Three.js with hardware-accelerated WebGL rendering, proper aspect ratio resize listeners, and clean requestAnimationFrame disposal loops.
+
+---
+
+## 6. NOVA OS 2.5 Major Subsystems (v0.5v)
+
+- **System Monitor (`src/apps/SystemMonitor/`)**: 10 diagnostic panels with real browser telemetry (`requestAnimationFrame` FPS loop, `PerformanceObserver` for long tasks, heap memory inspection, storage quota estimation, and WebGL hardware diagnostics).
+- **Customization Center (`src/apps/CustomizationCenter/`)**: 13 categories, 15 themes, 15 wallpapers, 8 cursor packs, 8 icon packs, 6 sound packs, and 5 coordinated bundles with Web Crypto SHA-256 package verification.
+- **Startup & Boot Manager (`src/core/boot/`, `src/apps/StartupManager/`)**: 8-stage boot simulation, multi-profile user management, session serialization/restoration, and emergency recovery options.
+- **NOVA AI Assistant (`src/core/assistant/`, `src/apps/NovaAI/`, `src/components/Assistant/`)**: Floating liquid-glass orb, Alt+Space shortcut, 17 typed OS tools with destructive action gates, offline intent router, and Web Speech API integration.

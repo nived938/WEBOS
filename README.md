@@ -68,13 +68,38 @@ npm run preview
 - **Logic & Puzzles**: Tetris Classic (SRS rotation & hard drops), 2048, Retro Snake, Minesweeper, Sudoku Master, Tic Tac Toe (Minimax AI), and Memory Match.
 - **Gaming Hub (`games`)**: Unified portal to browse, launch, or play any of the 14 games directly.
 
+### 6. NOVA Advanced System Monitor (`systemmonitor`)
+- **10 Diagnostic Panels**: Overview, Processes, Performance, Memory, Storage, Network, Applications, GPU & Graphics, Startup Apps, and System Logs.
+- **Real Browser Telemetry**: Native `requestAnimationFrame` FPS counter, `PerformanceObserver` for long tasks, Chromium JS heap memory inspection, Storage Quota API, and Resource Timing API.
+- **Interactive Process Manager**: Live window processes list with search, sorting by memory/heap, focus, minimize, restore, and safe window closing.
+- **GPU & WebGL Capabilities**: Real-time WebGL 2.0 unmasked renderer queries, active 3D context count, and GPU quality tuning presets (Low, Medium, High, Ultra).
+
+### 7. NOVA Customization Marketplace & Center (`customizationcenter`)
+- **13 Ecosystem Categories**: Featuring 15 themes, 15 wallpapers, 8 cursor packs, 8 icon packs, 6 sound packs, and 5 complete coordinated bundles.
+- **Safe Package Importer**: Import `.novapack` or JSON packages with Web Crypto SHA-256 verification and script injection prevention.
+- **One-Click Activation**: Instant propagation into active desktop theme, wallpapers, cursor styles, and audio soundscapes.
+
+### 8. NOVA Startup & Boot Manager (`startupmanager`)
+- **8-Stage Realistic Boot Sequence**: Hardware initialization, kernel bootstrap, VFS mounting, security handshake, and desktop compositor initialization.
+- **Session Restoration**: Automatic serialization and restoration of active workspaces, open windows, geometries, and z-indices across browser refreshes.
+- **Multi-Profile Architecture**: Switch between user profiles (Commander, Dev Space) and boot profiles (Normal, Gaming, Work, Minimal).
+- **Emergency Recovery Mode**: One-click recovery options (safe boot without startup apps, default theme restore, layout reset, full state reset).
+
+### 9. NOVA Intelligent Desktop Assistant (`nova_ai`)
+- **Multi-Modal Desktop Interaction**: Floating draggable liquid-glass orb, chat popover, voice soundwave HUD, and full window application.
+- **Controlled OS Tool Registry**: 17 typed tools (`open_app`, `close_app`, `change_theme`, `change_wallpaper`, `set_dock_position`, `switch_workspace`, `get_system_stats`, `launch_game`, `lock_system`, etc.) with user authorization gates for destructive actions.
+- **100% Offline Command Router**: Ultra-fast local regex and semantic intent parsing with zero network dependencies, with optional Ollama, Gemini, and OpenAI provider adapters.
+- **Web Speech & Local Memory**: Native voice recognition, text-to-speech feedback, and local semantic memory storage.
+
 ---
 
 ## 📱 Application Catalog (50+ Native Apps)
 
 | Category | Applications |
 | :--- | :--- |
-| **System** | Finder, Settings, App Store, App Library, Trash, Activity Monitor |
+| **System** | Finder, Settings, App Store, App Library, Trash, Activity Monitor, System Monitor, Startup & Boot Manager |
+| **Customization** | Customization Center, Wallpaper Studio, Theme Settings |
+| **AI & Automation** | NOVA AI Assistant (Floating Orb, Alt+Space, Voice HUD, Dedicated Window) |
 | **Productivity** | Text Editor, Tasks & Todo, Markdown Studio, Spreadsheet, Doc Viewer, Notes, Calendar |
 | **Internet** | Browser, Weather, News & RSS, Bookmarks Manager, Downloads Manager |
 | **Development** | Terminal, JSON Formatter, Code Playground, Color Studio, Regex Studio, API Client, GitHub Explorer |

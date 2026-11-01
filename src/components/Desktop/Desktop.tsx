@@ -18,6 +18,7 @@ import { BootScreen } from '@/components/Boot/BootScreen'
 import { LockScreen } from '@/components/LockScreen/LockScreen'
 import { ActivitiesOverview } from '@/components/WindowManager/ActivitiesOverview'
 import { AppLauncher } from '@/components/Launcher/AppLauncher'
+import { FloatingNovaAIAssistant } from '@/components/Assistant/FloatingNovaAIAssistant'
 import { soundService } from '@/core/audio/soundService'
 import { Power, Moon, MousePointer2 } from 'lucide-react'
 import type { FSNode } from '@/core/filesystem/types'
@@ -640,6 +641,9 @@ export const Desktop: React.FC = () => {
           </div>
         </>
       )}
+
+      {/* Global Intelligent Desktop Assistant (NOVA AI) */}
+      {!isLocked && !isAsleep && !isShutDown && <FloatingNovaAIAssistant />}
 
       {/* Virtual Sleep Mode Screen Overlay */}
       {isAsleep && (

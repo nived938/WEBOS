@@ -33,18 +33,26 @@ src/
 │   ├── AppLibrary/     # Ubuntu-inspired Software Center
 │   ├── Browser/        # Multi-tab web browser & in-app SERP
 │   ├── Calculator/     # Standard & scientific math engine
+│   ├── CustomizationCenter/ # Themes, wallpapers, cursors & sounds marketplace
 │   ├── Finder/         # Virtual filesystem explorer
 │   ├── Games/          # 2D & 3D Three.js Arcade Games
+│   ├── NovaAI/         # Intelligent desktop assistant full-window app
+│   ├── StartupManager/ # Boot themes, startup apps & session restoration
+│   ├── SystemMonitor/  # 10-panel hardware, memory & process activity monitor
 │   ├── Terminal/       # Unix shell emulator
 │   └── ...             # Productivity, Dev, Media, Utility apps
 ├── components/         # Desktop Environment Components
+│   ├── Assistant/      # Floating interactive orb, soundwave HUD & chat popup
+│   ├── Boot/           # 8-stage boot screen & emergency recovery modal
 │   ├── Desktop/        # Wallpaper, icon grid, selection box
 │   ├── Dock/           # Mac-style magnified launcher
 │   ├── MenuBar/        # Top status bar, clock, control center
 │   └── WindowManager/  # WindowFrame, WindowControls, resizing
 ├── core/               # State Management & Virtual Subsystems
 │   ├── appRegistry/    # Registry of apps, metadata, categories
+│   ├── assistant/      # Intent router, tool registry, voice, memory & providers
 │   ├── audio/          # SoundService (WebAudio synthesizers)
+│   ├── boot/           # Boot manager, session persistence, user & boot profiles
 │   ├── filesystem/     # In-memory persistent VFS
 │   ├── settings/       # System preferences & wallpaper definitions
 │   └── windowManager/  # Window state, z-index, drag & drop

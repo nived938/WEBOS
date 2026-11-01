@@ -1,140 +1,318 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import type { AppInstanceProps } from '@/core/appRegistry/types'
 import { soundService } from '@/core/audio/soundService'
-import { Cpu, HardDrive, Activity, XOctagon, Zap } from 'lucide-react'
+import { useWindowManager } from '@/core/windowManager/WindowContext'
+import { APPS_REGISTRY } from '@/core/appRegistry/apps.config'
+import {
+  Activity,
+  Layers,
+  TrendingUp,
+  Cpu,
+  HardDrive,
+  Wifi,
+  AppWindow,
+  Monitor,
+  Rocket,
+  FileText,
+  AlertTriangle,
+  Sparkles,
+} from 'lucide-react'
+import type {
+  SystemMonitorTab,
+  ProcessItem,
+  TelemetrySnapshot,
+  GpuCapabilities,
+  NetworkResourceEntry,
+  SystemLogEntry,
+} from './types'
+import { telemetryService } from './utils/telemetry'
+import { OverviewTab } from './components/OverviewTab'
+import { ProcessesTab } from './components/ProcessesTab'
+import { PerformanceTab } from './components/PerformanceTab'
+import { MemoryTab } from './components/MemoryTab'
+import { StorageTab } from './components/StorageTab'
+import { NetworkTab } from './components/NetworkTab'
+import { ApplicationsTab } from './components/ApplicationsTab'
+import { GpuTab } from './components/GpuTab'
+import { StartupAppsTab } from './components/StartupAppsTab'
+import { SystemLogsTab } from './components/SystemLogsTab'
 
-interface ProcessItem {
-  pid: number
-  name: string
-  cpu: number
-  memoryMb: number
-  status: 'running' | 'sleeping'
-}
-
-const INITIAL_PROCESSES: ProcessItem[] = [
-  { pid: 101, name: 'Compositor Engine (LiquidGlass)', cpu: 4.8, memoryMb: 142, status: 'running' },
-  { pid: 102, name: 'Window Manager (Workspaces)', cpu: 1.2, memoryMb: 68, status: 'running' },
-  { pid: 104, name: 'Finder VFS Storage Agent', cpu: 0.5, memoryMb: 45, status: 'sleeping' },
-  { pid: 108, name: 'Audio Sound Service', cpu: 0.2, memoryMb: 24, status: 'sleeping' },
-  { pid: 112, name: 'Spotlight Search Indexer', cpu: 0.8, memoryMb: 36, status: 'running' },
+const NAVIGATION_ITEMS: { id: SystemMonitorTab; label: string; icon: React.FC<{ className?: string }> }[] = [
+  { id: 'overview', label: 'Overview', icon: Activity },
+  { id: 'processes', label: 'Processes', icon: Layers },
+  { id: 'performance', label: 'Performance', icon: TrendingUp },
+  { id: 'memory', label: 'Memory', icon: Cpu },
+  { id: 'storage', label: 'Storage', icon: HardDrive },
+  { id: 'network', label: 'Network', icon: Wifi },
+  { id: 'applications', label: 'Applications', icon: AppWindow },
+  { id: 'gpu', label: 'GPU & Graphics', icon: Monitor },
+  { id: 'startup', label: 'Startup Apps', icon: Rocket },
+  { id: 'logs', label: 'System Logs', icon: FileText },
 ]
 
 export const SystemMonitorApp: React.FC<AppInstanceProps> = () => {
-  const [cpuHistory, setCpuHistory] = useState<number[]>(Array(24).fill(15))
-  const [processes, setProcesses] = useState<ProcessItem[]>(INITIAL_PROCESSES)
-  const [ramUsedMb, setRamUsedMb] = useState(315)
+  const {
+    windows,
+    runningAppIds,
+    activeWindow,
+    focusWindow,
+    minimizeWindow,
+    restoreWindow,
+    closeWindow,
+  } = useWindowManager()
 
+  const [activeTab, setActiveTab] = useState<SystemMonitorTab>('overview')
+  const [isPaused, setIsPaused] = useState(false)
+
+  // Live telemetry state
+  const [telemetry, setTelemetry] = useState<TelemetrySnapshot>({
+    timestamp: Date.now(),
+    fps: 60,
+    jsHeapUsedMb: null,
+    jsHeapTotalMb: null,
+    storageUsedMb: null,
+    storageQuotaMb: null,
+    runningWindows: windows.length,
+    activeAppId: activeWindow?.appId || null,
+    longTasksCount: 0,
+  })
+
+  // Bounded circular history buffer (max 180 points = 3 minutes at 1s intervals)
+  const [history, setHistory] = useState<TelemetrySnapshot[]>([])
+
+  // Hardware / Graphics capabilities
+  const [gpuInfo, setGpuInfo] = useState<GpuCapabilities>(() => telemetryService.getGpuInfo())
+  const [cpuCores] = useState<number>(() => telemetryService.getCpuCores())
+  const [deviceMemory] = useState<number | null>(() => telemetryService.getDeviceMemoryEstimate())
+  const [connectionInfo, setConnectionInfo] = useState(() => telemetryService.getConnectionInfo())
+  const [networkEntries, setNetworkEntries] = useState<NetworkResourceEntry[]>([])
+
+  // Logs stream
+  const [logs, setLogs] = useState<SystemLogEntry[]>([
+    {
+      id: 'log-1',
+      timestamp: Date.now() - 60000,
+      level: 'info',
+      source: 'Kernel',
+      message: 'NOVA System Monitor telemetry agent attached to window compositor.',
+    },
+    {
+      id: 'log-2',
+      timestamp: Date.now() - 45000,
+      level: 'info',
+      source: 'WebGL',
+      message: 'Hardware accelerated WebGL pipeline initialized.',
+    },
+    {
+      id: 'log-3',
+      timestamp: Date.now() - 30000,
+      level: 'debug',
+      source: 'Storage',
+      message: 'StorageManager estimate queried successfully.',
+    },
+  ])
+
+  // Process item mapping from live WindowManager windows
+  const processes: ProcessItem[] = useMemo(() => {
+    return windows.map((w) => {
+      const regApp = APPS_REGISTRY[w.appId]
+      const isFocused = w.isFocused
+      const isMinimized = w.isMinimized
+      const status: ProcessItem['status'] = isFocused
+        ? 'focused'
+        : isMinimized
+        ? 'minimized'
+        : 'active'
+
+      return {
+        id: w.id,
+        appId: w.appId,
+        name: regApp ? regApp.title : w.title || w.appId,
+        category: regApp ? regApp.category : 'System',
+        status,
+        windowCount: 1,
+        startTime: (w.initialArgs?.launchTime as number) || Date.now() - 15000,
+        lastActive: Date.now(),
+        estimatedMemoryMb: Math.round(18 + (w.appId.startsWith('game_') ? 35 : 8)),
+        accentColor: regApp?.accentColor || '#3b82f6',
+      }
+    })
+  }, [windows])
+
+  // Sample telemetry interval
   useEffect(() => {
-    const interval = setInterval(() => {
-      const nextCpu = Math.floor(Math.random() * 25) + 10
-      setCpuHistory((prev) => [...prev.slice(1), nextCpu])
+    if (isPaused) return
 
-      // Random jitter on process cpu
-      setProcesses((prev) =>
-        prev.map((p) => ({
-          ...p,
-          cpu: Number((p.cpu + (Math.random() * 0.6 - 0.3)).toFixed(1)),
-        }))
-      )
-    }, 1200)
+    let isMounted = true
+    const interval = setInterval(async () => {
+      const fps = telemetryService.getFps()
+      const heap = telemetryService.getJsHeap()
+      const storage = await telemetryService.getStorageEstimate()
+      const longTasks = telemetryService.getLongTasksCount()
+      const net = telemetryService.getNetworkEntries(30)
+      const conn = telemetryService.getConnectionInfo()
 
-    return () => clearInterval(interval)
-  }, [])
+      if (!isMounted) return
 
-  const killProcess = (pid: number) => {
-    soundService.play('buttonClick')
-    setProcesses((prev) => prev.filter((p) => p.pid !== pid))
-  }
+      setNetworkEntries(net)
+      setConnectionInfo(conn)
 
-  const currentCpu = cpuHistory[cpuHistory.length - 1]
+      const snap: TelemetrySnapshot = {
+        timestamp: Date.now(),
+        fps,
+        jsHeapUsedMb: heap.usedMb,
+        jsHeapTotalMb: heap.totalMb,
+        storageUsedMb: storage.usedMb,
+        storageQuotaMb: storage.quotaMb,
+        runningWindows: windows.length,
+        activeAppId: activeWindow?.appId || null,
+        longTasksCount: longTasks,
+      }
+
+      setTelemetry(snap)
+      setHistory((prev) => {
+        const next = [...prev, snap]
+        return next.length > 180 ? next.slice(-180) : next
+      })
+
+      // Add log when windows change
+      if (windows.length > 0 && Math.random() < 0.15) {
+        setLogs((prev) => [
+          ...prev.slice(-99),
+          {
+            id: `log-${Date.now()}`,
+            timestamp: Date.now(),
+            level: 'info',
+            source: 'Compositor',
+            message: `Sampled FPS: ${fps} | Windows: ${windows.length} | JS Heap: ${heap.usedMb || 0}MB`,
+          },
+        ])
+      }
+    }, 1000)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
+  }, [isPaused, windows.length, activeWindow?.appId])
 
   return (
-    <div className="flex flex-col h-full bg-[#15151c] text-neutral-200 font-sans select-none overflow-hidden">
-      {/* Top Header */}
-      <div className="px-4 py-2 border-b border-white/10 bg-black/40 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Activity size={16} className="text-emerald-400" />
-          <span className="font-semibold text-white text-xs">NOVA System & Process Monitor</span>
-        </div>
-        <span className="text-[10px] text-neutral-400 font-mono">Kernel 2.5.0-browser</span>
-      </div>
-
-      {/* Top Cards: CPU & RAM */}
-      <div className="p-4 grid grid-cols-2 gap-4 border-b border-white/10 bg-black/20">
-        {/* CPU Box */}
-        <div className="bg-white/5 border border-white/10 p-3 rounded-xl">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
-              <Cpu size={14} className="text-blue-400" /> CPU Load
-            </span>
-            <span className="text-xs font-mono font-bold text-blue-400">{currentCpu}%</span>
-          </div>
-
-          <div className="h-14 flex items-end gap-1">
-            {cpuHistory.map((val, idx) => (
-              <div
-                key={idx}
-                style={{ height: `${val}%` }}
-                className="flex-1 bg-gradient-to-t from-blue-600 to-cyan-400 rounded-t transition-all duration-300"
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* RAM Box */}
-        <div className="bg-white/5 border border-white/10 p-3 rounded-xl flex flex-col justify-between">
-          <div className="flex justify-between items-center">
-            <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
-              <HardDrive size={14} className="text-purple-400" /> RAM Memory
-            </span>
-            <span className="text-xs font-mono font-bold text-purple-400">
-              {(ramUsedMb / 1024).toFixed(2)} GB / 8.00 GB
-            </span>
-          </div>
-
-          <div>
-            <div className="w-full bg-white/10 h-2.5 rounded-full overflow-hidden mb-1">
-              <div
-                style={{ width: `${(ramUsedMb / 1024 / 8) * 100}%` }}
-                className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500"
-              />
+    <div className="flex h-full bg-[#11121a]/95 text-neutral-200 font-sans select-none overflow-hidden backdrop-blur-2xl">
+      {/* Ubuntu-inspired Navigation Sidebar */}
+      <div className="w-56 bg-black/40 border-r border-white/10 flex flex-col justify-between shrink-0">
+        <div>
+          {/* Header */}
+          <div className="p-4 border-b border-white/10 flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20">
+              <Activity className="w-4 h-4" />
             </div>
-            <span className="text-[10px] text-neutral-400">3.9% of virtual heap consumed</span>
+            <div>
+              <h2 className="text-xs font-bold text-white tracking-wide">NOVA MONITOR</h2>
+              <span className="text-[10px] text-neutral-400 font-mono">System & Processes</span>
+            </div>
+          </div>
+
+          {/* Navigation Links */}
+          <nav className="p-2 space-y-1">
+            {NAVIGATION_ITEMS.map((item) => {
+              const Icon = item.icon
+              const isActive = activeTab === item.id
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    soundService.playClick()
+                    setActiveTab(item.id)
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                    isActive
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-md shadow-cyan-500/10'
+                      : 'text-neutral-400 hover:text-white hover:bg-white/5 border border-transparent'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-neutral-400'}`} />
+                  <span>{item.label}</span>
+                </button>
+              )
+            })}
+          </nav>
+        </div>
+
+        {/* Footer Quick Telemetry Badge */}
+        <div className="p-3 border-t border-white/10 bg-black/20 m-2 rounded-xl">
+          <div className="flex items-center justify-between text-[11px] mb-1">
+            <span className="text-neutral-400 font-medium">Renderer FPS</span>
+            <span className="text-emerald-400 font-mono font-bold">{telemetry.fps}</span>
+          </div>
+          <div className="w-full bg-white/10 h-1 rounded-full overflow-hidden">
+            <div
+              style={{ width: `${Math.min(100, (telemetry.fps / 60) * 100)}%` }}
+              className={`h-full ${telemetry.fps >= 50 ? 'bg-emerald-400' : 'bg-amber-400'}`}
+            />
           </div>
         </div>
       </div>
 
-      {/* Process Table */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <table className="w-full text-left text-xs font-mono">
-          <thead>
-            <tr className="border-b border-white/10 text-neutral-400 text-[11px] pb-2">
-              <th className="pb-2 font-semibold">PID</th>
-              <th className="pb-2 font-semibold">Process Name</th>
-              <th className="pb-2 font-semibold">CPU %</th>
-              <th className="pb-2 font-semibold">Memory</th>
-              <th className="pb-2 font-semibold text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5 text-neutral-300">
-            {processes.map((proc) => (
-              <tr key={proc.pid} className="hover:bg-white/5 transition-colors">
-                <td className="py-2.5 text-neutral-500">{proc.pid}</td>
-                <td className="py-2.5 font-medium text-white">{proc.name}</td>
-                <td className="py-2.5 text-blue-400">{proc.cpu}%</td>
-                <td className="py-2.5 text-purple-400">{proc.memoryMb} MB</td>
-                <td className="py-2.5 text-right">
-                  <button
-                    onClick={() => killProcess(proc.pid)}
-                    className="px-2 py-0.5 rounded bg-red-500/20 hover:bg-red-500 text-red-300 hover:text-white transition-colors text-[10px]"
-                  >
-                    End Task
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Main Tab Content Display Area */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-transparent">
+        {activeTab === 'overview' && (
+          <OverviewTab
+            currentTelemetry={telemetry}
+            history={history}
+            gpuInfo={gpuInfo}
+            cpuCores={cpuCores}
+            deviceMemory={deviceMemory}
+            activeAppsCount={runningAppIds.length}
+            openWindowsCount={windows.length}
+            onNavigateTab={setActiveTab}
+          />
+        )}
+
+        {activeTab === 'processes' && (
+          <ProcessesTab
+            processes={processes}
+            onFocusWindow={focusWindow}
+            onMinimizeWindow={minimizeWindow}
+            onRestoreWindow={restoreWindow}
+            onCloseWindow={closeWindow}
+          />
+        )}
+
+        {activeTab === 'performance' && (
+          <PerformanceTab
+            history={history}
+            isPaused={isPaused}
+            onTogglePause={() => {
+              soundService.playClick()
+              setIsPaused(!isPaused)
+            }}
+            onClearHistory={() => setHistory([])}
+          />
+        )}
+
+        {activeTab === 'memory' && (
+          <MemoryTab currentTelemetry={telemetry} deviceMemory={deviceMemory} />
+        )}
+
+        {activeTab === 'storage' && (
+          <StorageTab storageUsedMb={telemetry.storageUsedMb} storageQuotaMb={telemetry.storageQuotaMb} />
+        )}
+
+        {activeTab === 'network' && (
+          <NetworkTab networkEntries={networkEntries} connectionInfo={connectionInfo} />
+        )}
+
+        {activeTab === 'applications' && (
+          <ApplicationsTab runningAppIds={runningAppIds} openWindowsCount={windows.length} />
+        )}
+
+        {activeTab === 'gpu' && <GpuTab gpuInfo={gpuInfo} runningAppIds={runningAppIds} />}
+
+        {activeTab === 'startup' && <StartupAppsTab />}
+
+        {activeTab === 'logs' && (
+          <SystemLogsTab logs={logs} onClearLogs={() => setLogs([])} />
+        )}
       </div>
     </div>
   )

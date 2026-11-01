@@ -66,3 +66,13 @@ return () => {
 }
 ```
 Failing to dispose renderers and cancel animation frames causes GPU memory leaks and WebGL context loss.
+
+---
+
+## 6. Controlled Tool Registry & Safety Architecture
+
+For any autonomous agents extending NOVA OS automation or NOVA AI:
+1. **No Arbitrary Code Execution**: Tools in `src/core/assistant/tools/toolRegistry.ts` must execute strictly through typed functions.
+2. **Destructive Tool Guardrails**: Any tool modifying or deleting user data (`delete_file`, `reset_settings`) must declare `isDestructive: true`, requiring explicit user interaction before execution.
+3. **Hardware Grounding**: Never fabricate fake host metrics (e.g. fake CPU frequencies or host operating system RAM). Query real browser APIs (`performance.now()`, `PerformanceObserver`, `performance.memory`, `navigator.storage.estimate()`, WebGL context parameters) and handle missing browser features gracefully with typed fallbacks.
+4. **Package Integrity**: All custom themes and packages imported via Customization Center must be validated against JSON schemas and cryptographically verified using `crypto.subtle.digest('SHA-256')`. Dynamic JavaScript execution (`eval`, `Function`, script tags) inside packages is strictly forbidden.

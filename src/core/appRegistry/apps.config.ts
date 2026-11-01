@@ -164,6 +164,9 @@ import { ClipboardManagerApp } from '@/apps/ClipboardManager/ClipboardManagerApp
 import { StopwatchApp } from '@/apps/Stopwatch/StopwatchApp'
 import { WorldClockApp } from '@/apps/WorldClock/WorldClockApp'
 import { SystemMonitorApp } from '@/apps/SystemMonitor/SystemMonitorApp'
+import { CustomizationCenterApp } from '@/apps/CustomizationCenter/CustomizationCenterApp'
+import { StartupManagerApp } from '@/apps/StartupManager/StartupManagerApp'
+import { NovaAIApp } from '@/apps/NovaAI/NovaAIApp'
 import { StorageExplorerApp } from '@/apps/StorageExplorer/StorageExplorerApp'
 import { DuplicateFinderApp } from '@/apps/DuplicateFinder/DuplicateFinderApp'
 
@@ -2066,17 +2069,59 @@ export const APPS_REGISTRY: Record<string, RegisteredApp> = {
   },
   systemmonitor: {
     id: 'systemmonitor',
-    title: 'System Monitor',
-    category: 'Utilities',
-    description: 'Live CPU graph, RAM utilization and task termination',
-    version: '2.5',
-    defaultWidth: 780,
-    defaultHeight: 520,
-    minWidth: 400,
-    minHeight: 300,
+    title: 'NOVA System Monitor',
+    category: 'System',
+    description: 'Comprehensive OS activity monitor with process manager, performance telemetry, memory, storage, WebGL GPU, and event logs',
+    version: '3.0',
+    defaultWidth: 920,
+    defaultHeight: 620,
+    minWidth: 600,
+    minHeight: 450,
     accentColor: '#10b981',
     gradient: 'from-emerald-500 to-teal-600',
     component: SystemMonitorApp,
+  },
+  customizationcenter: {
+    id: 'customizationcenter',
+    title: 'NOVA Customization Center',
+    category: 'System',
+    description: 'Complete marketplace for themes, wallpapers, cursor packs, icon sets, soundscapes, and desktop bundles',
+    version: '2.5',
+    defaultWidth: 940,
+    defaultHeight: 640,
+    minWidth: 620,
+    minHeight: 460,
+    accentColor: '#a855f7',
+    gradient: 'from-purple-600 to-indigo-700',
+    component: CustomizationCenterApp,
+  },
+  startupmanager: {
+    id: 'startupmanager',
+    title: 'NOVA Boot Manager',
+    category: 'System',
+    description: 'Startup applications manager, boot screen styler, session restore, user profiles, and emergency recovery',
+    version: '2.5',
+    defaultWidth: 880,
+    defaultHeight: 600,
+    minWidth: 580,
+    minHeight: 440,
+    accentColor: '#06b6d4',
+    gradient: 'from-cyan-500 to-blue-600',
+    component: StartupManagerApp,
+  },
+  nova_ai: {
+    id: 'nova_ai',
+    title: 'NOVA AI Assistant',
+    category: 'Utilities',
+    description: 'Intelligent desktop companion with natural language OS tool execution, local Ollama/Gemini/OpenAI adapters, and voice interaction',
+    version: '2.0',
+    defaultWidth: 880,
+    defaultHeight: 620,
+    minWidth: 580,
+    minHeight: 440,
+    accentColor: '#00f0ff',
+    gradient: 'from-cyan-400 via-indigo-500 to-fuchsia-500',
+    component: NovaAIApp,
   },
   storageexplorer: {
     id: 'storageexplorer',
