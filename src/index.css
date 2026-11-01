@@ -21,3 +21,13 @@ html, body, #root {
   overflow: hidden;
   position: fixed;
 }
+
+/* Accessibility: Reduced Motion Support */
+.reduced-motion *,
+.reduced-motion *::before,
+.reduced-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}

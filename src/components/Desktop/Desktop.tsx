@@ -511,7 +511,9 @@ export const Desktop: React.FC = () => {
       onPointerMove={handleDesktopPointerMove}
       onPointerUp={handleDesktopPointerUp}
       onContextMenu={handleDesktopContextMenu}
-      className="fixed inset-0 w-screen h-screen overflow-hidden select-none transition-all duration-300"
+      className={`fixed inset-0 w-screen h-screen overflow-hidden select-none transition-all duration-300 ${
+        settings.reducedMotion ? 'reduced-motion' : ''
+      }`}
     >
       {/* Top Menu Bar */}
       <MenuBar onOpenSpotlight={() => setIsSpotlightOpen(true)} />

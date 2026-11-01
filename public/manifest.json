@@ -1,0 +1,20 @@
+{
+  "name": "NOVA OS • Virtual Operating System",
+  "short_name": "NOVA OS",
+  "description": "An advanced, beautiful, fully interactive browser-based operating system with liquid glass interface and native app ecosystem.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#090817",
+  "theme_color": "#090817",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "productivity", "games"]
+}
