@@ -1,342 +1,435 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import type { AppInstanceProps } from '@/core/appRegistry/types'
 import { useWindowManager } from '@/core/windowManager/WindowContext'
-import type { AppId } from '@/types'
+import { useAppInstallation } from '@/core/appStore/AppInstallationContext'
+import type { StoreCategory, AppPackageManifest } from '@/core/appStore/types'
+import { soundService } from '@/core/audio/soundService'
 import {
   Download,
   Check,
-  Star,
-  ExternalLink,
-  Gamepad2,
-  Folder,
-  Globe,
-  Music,
-  Terminal,
-  Settings,
-  Image,
-  Calendar,
-  Calculator,
-  Mail,
-  FileText,
   Search,
+  Sparkles,
+  Grid,
+  Gamepad2,
+  Briefcase,
+  Code,
+  GraduationCap,
+  Globe,
+  Palette,
+  Camera,
+  Film,
+  Music,
+  MessageSquare,
+  Shield,
+  Wrench,
+  Cpu,
+  Layers,
+  X,
+  Play,
+  RotateCw,
+  Trash2,
+  Info,
+  CheckCircle2,
+  HardDrive,
+  ExternalLink,
 } from 'lucide-react'
-import { soundService } from '@/core/audio/soundService'
-import { useNotifications } from '@/core/notifications/NotificationContext'
-
-interface StoreApp {
-  id: string
-  appId?: AppId
-  name: string
-  developer: string
-  category: 'Productivity' | 'Utilities' | 'Media' | 'Games'
-  rating: number
-  reviewsCount: number
-  description: string
-  iconBg: string
-  iconColor: string
-  iconComponent: React.ComponentType<{ size: number; className?: string }>
-  isBuiltIn: boolean
-  isInstalled: boolean
-}
-
-const STORE_CATALOG: StoreApp[] = [
-  {
-    id: 'store-games',
-    appId: 'games',
-    name: 'Nova Odyssey',
-    developer: 'Nova Arcade Studios',
-    category: 'Games',
-    rating: 4.9,
-    reviewsCount: 1420,
-    description: 'A smooth 60 FPS cyberpunk 2D platformer with procedural physics, double jumps, moving platforms, and high-energy electronic sound effects.',
-    iconBg: 'bg-gradient-to-tr from-violet-600 to-fuchsia-600',
-    iconColor: 'text-white',
-    iconComponent: Gamepad2,
-    isBuiltIn: true,
-    isInstalled: true,
-  },
-  {
-    id: 'store-finder',
-    appId: 'finder',
-    name: 'Finder',
-    developer: 'NOVA OS Core',
-    category: 'System' as any,
-    rating: 4.8,
-    reviewsCount: 3820,
-    description: 'The premier file management system for NOVA OS, featuring IndexedDB persistence, local file importing, and virtual drive browsing.',
-    iconBg: 'bg-gradient-to-tr from-blue-500 to-cyan-500',
-    iconColor: 'text-white',
-    iconComponent: Folder,
-    isBuiltIn: true,
-    isInstalled: true,
-  },
-  {
-    id: 'store-browser',
-    appId: 'browser',
-    name: 'NOVA Browser',
-    developer: 'NOVA OS Core',
-    category: 'Utilities',
-    rating: 4.7,
-    reviewsCount: 2900,
-    description: 'Fast, secure, multi-tabbed web browsing with customizable bookmarks, search engines, and intelligent X-Frame-Options handling.',
-    iconBg: 'bg-gradient-to-tr from-sky-500 to-indigo-600',
-    iconColor: 'text-white',
-    iconComponent: Globe,
-    isBuiltIn: true,
-    isInstalled: true,
-  },
-  {
-    id: 'store-music',
-    appId: 'music',
-    name: 'Music',
-    developer: 'NOVA OS Audio',
-    category: 'Media',
-    rating: 4.9,
-    reviewsCount: 1980,
-    description: 'Procedural Web Audio ambient music generator and local audio track player with live canvas frequency visualizer.',
-    iconBg: 'bg-gradient-to-tr from-pink-500 to-rose-600',
-    iconColor: 'text-white',
-    iconComponent: Music,
-    isBuiltIn: true,
-    isInstalled: true,
-  },
-  {
-    id: 'store-terminal',
-    appId: 'terminal',
-    name: 'Terminal',
-    developer: 'NOVA OS Core',
-    category: 'Utilities',
-    rating: 5.0,
-    reviewsCount: 4120,
-    description: 'Unix-style command line shell with filesystem navigation, neofetch system info, and app launching capabilities.',
-    iconBg: 'bg-neutral-900 border border-white/20',
-    iconColor: 'text-emerald-400',
-    iconComponent: Terminal,
-    isBuiltIn: true,
-    isInstalled: true,
-  },
-  {
-    id: 'store-notes',
-    appId: 'notes',
-    name: 'Notes',
-    developer: 'NOVA OS Core',
-    category: 'Productivity',
-    rating: 4.8,
-    reviewsCount: 2450,
-    description: 'Rich text notes organizer with real-time autosave, Markdown formatting tools, and folder categorization.',
-    iconBg: 'bg-gradient-to-tr from-amber-500 to-orange-600',
-    iconColor: 'text-white',
-    iconComponent: FileText,
-    isBuiltIn: true,
-    isInstalled: true,
-  },
-  {
-    id: 'store-photos',
-    appId: 'photos',
-    name: 'Photos',
-    developer: 'NOVA OS Media',
-    category: 'Media',
-    rating: 4.7,
-    reviewsCount: 1680,
-    description: 'High-resolution photo library with image zoom, rotation, metadata inspector, and instant wallpaper setting.',
-    iconBg: 'bg-gradient-to-tr from-emerald-500 to-teal-600',
-    iconColor: 'text-white',
-    iconComponent: Image,
-    isBuiltIn: true,
-    isInstalled: true,
-  },
-  {
-    id: 'store-calculator',
-    appId: 'calculator',
-    name: 'Calculator',
-    developer: 'NOVA OS Core',
-    category: 'Utilities',
-    rating: 4.9,
-    reviewsCount: 3100,
-    description: 'Standard and scientific mathematical calculator with keyboard input and equation history drawer.',
-    iconBg: 'bg-gradient-to-tr from-orange-500 to-amber-600',
-    iconColor: 'text-white',
-    iconComponent: Calculator,
-    isBuiltIn: true,
-    isInstalled: true,
-  },
-]
 
 export const AppStoreApp: React.FC<AppInstanceProps> = () => {
   const { openApp } = useWindowManager()
-  const { addNotification } = useNotifications()
-  const [apps, setApps] = useState<StoreApp[]>(STORE_CATALOG)
-  const [selectedCategory, setSelectedCategory] = useState<string>('All')
+  const {
+    installedPackageIds,
+    isInstalled,
+    activeInstallations,
+    installPackage,
+    cancelInstallation,
+    uninstallPackage,
+    updatePackage,
+    totalInstalledStorageBytes,
+    getAllPackages,
+  } = useAppInstallation()
+
+  const [activeCategory, setActiveCategory] = useState<StoreCategory | 'Installed'>('Featured')
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedApp, setSelectedApp] = useState<StoreApp>(STORE_CATALOG[0])
+  const [selectedPackage, setSelectedPackage] = useState<AppPackageManifest | null>(null)
 
-  const categories = ['All', 'Productivity', 'Utilities', 'Media', 'Games']
+  const allPackages = useMemo(() => getAllPackages(), [getAllPackages])
 
-  const filteredApps = apps.filter((app) => {
-    const matchesCat = selectedCategory === 'All' || app.category === selectedCategory
-    const matchesQuery =
-      searchQuery === '' ||
-      app.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      app.description.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesCat && matchesQuery
-  })
+  const categories: { id: StoreCategory | 'Installed'; label: string; icon: React.FC<{ size?: number; className?: string }> }[] = [
+    { id: 'Featured', label: 'Featured Showcase', icon: Sparkles },
+    { id: 'All Applications', label: 'All Applications', icon: Grid },
+    { id: 'Installed', label: 'Installed Software', icon: CheckCircle2 },
+    { id: 'Productivity', label: 'Productivity', icon: Briefcase },
+    { id: 'Development', label: 'Development', icon: Code },
+    { id: 'Education', label: 'Education & Learning', icon: GraduationCap },
+    { id: 'Graphics', label: 'Graphics & Design', icon: Palette },
+    { id: 'Games', label: 'Gaming & Arcade', icon: Gamepad2 },
+    { id: 'Internet', label: 'Internet & Web', icon: Globe },
+    { id: 'Photography', label: 'Photography', icon: Camera },
+    { id: 'Video', label: 'Video & Motion', icon: Film },
+    { id: 'Music', label: 'Music & Audio', icon: Music },
+    { id: 'Communication', label: 'Communication', icon: MessageSquare },
+    { id: 'Security', label: 'Privacy & Security', icon: Shield },
+    { id: 'Utilities', label: 'Utilities', icon: Wrench },
+    { id: 'System Tools', label: 'System Tools', icon: Cpu },
+    { id: 'Customization', label: 'Customization', icon: Layers },
+  ]
 
-  const handleLaunchApp = (app: StoreApp) => {
-    soundService.playClick()
-    if (app.appId) {
-      openApp(app.appId)
-    }
-  }
+  // Filter packages based on active category & search query
+  const filteredPackages = useMemo(() => {
+    return allPackages.filter((pkg) => {
+      // Category filter
+      if (activeCategory === 'Installed') {
+        if (!isInstalled(pkg.id)) return false
+      } else if (activeCategory === 'Featured') {
+        if (!pkg.featured) return false
+      } else if (activeCategory !== 'All Applications') {
+        if (pkg.category !== activeCategory) return false
+      }
 
-  const handleInstallApp = (app: StoreApp) => {
-    soundService.playClick()
-    setApps((prev) =>
-      prev.map((a) => (a.id === app.id ? { ...a, isInstalled: true } : a))
-    )
-    addNotification('App Installed', `"${app.name}" is now ready to use!`, 'appstore')
+      // Search query filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase()
+        return (
+          pkg.name.toLowerCase().includes(q) ||
+          pkg.description.toLowerCase().includes(q) ||
+          pkg.developer.toLowerCase().includes(q) ||
+          pkg.category.toLowerCase().includes(q)
+        )
+      }
+      return true
+    })
+  }, [allPackages, activeCategory, searchQuery, isInstalled])
+
+  const formatBytes = (bytes: number) => {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
   return (
-    <div className="flex h-full bg-neutral-900/90 text-neutral-200 select-none backdrop-blur-xl">
-      {/* Sidebar Navigation */}
-      <div className="w-52 border-r border-white/10 bg-black/20 flex flex-col p-3 space-y-1 text-xs">
-        <div className="px-3 py-2 mb-2 font-bold text-white text-sm flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-blue-600 flex items-center justify-center text-xs font-bold">
-            A
+    <div className="flex h-full bg-neutral-900/95 text-neutral-200 select-none backdrop-blur-2xl relative overflow-hidden">
+      {/* Sidebar Categories */}
+      <div className="w-56 border-r border-white/10 bg-black/35 flex flex-col p-2.5 text-xs select-none shrink-0">
+        <div className="px-2 pt-1 pb-2">
+          <div className="font-bold text-white text-sm tracking-tight flex items-center justify-between">
+            <span>Software Center</span>
+            <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded-full border border-cyan-500/20">
+              NOVA 2.5
+            </span>
           </div>
-          <span>App Store</span>
+          <div className="text-[10px] text-neutral-400 mt-0.5">Verified Application Repository</div>
         </div>
 
-        <div className="relative mb-3">
-          <Search size={13} className="absolute left-2.5 top-2 text-neutral-400" />
+        {/* Search Input Box */}
+        <div className="relative mb-2 px-1">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
           <input
             type="text"
-            placeholder="Search apps..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-black/40 border border-white/10 rounded-lg pl-7 pr-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
+            placeholder="Search software..."
+            className="w-full pl-7 pr-6 py-1.5 rounded-xl bg-white/10 border border-white/10 text-white text-[11px] placeholder-neutral-400 focus:outline-none focus:border-blue-500 transition"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white p-0.5"
+            >
+              <X size={12} />
+            </button>
+          )}
         </div>
 
-        <div className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider px-2 py-1">
-          Discover
+        {/* Category List */}
+        <div className="flex-1 overflow-y-auto space-y-0.5 pr-1 custom-scrollbar">
+          {categories.map((cat) => {
+            const Icon = cat.icon
+            const isActive = activeCategory === cat.id
+            const count =
+              cat.id === 'Installed'
+                ? installedPackageIds.length
+                : cat.id === 'Featured'
+                ? allPackages.filter((p) => p.featured).length
+                : cat.id === 'All Applications'
+                ? allPackages.length
+                : allPackages.filter((p) => p.category === cat.id).length
+
+            return (
+              <button
+                key={cat.id}
+                onClick={() => {
+                  soundService.playClick()
+                  setActiveCategory(cat.id)
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl transition text-left ${
+                  isActive
+                    ? 'bg-blue-600/30 text-white font-semibold border border-blue-500/30 shadow-sm'
+                    : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <Icon size={14} className={isActive ? 'text-blue-400' : 'text-neutral-400'} />
+                  <span className="truncate text-xs">{cat.label}</span>
+                </div>
+                <span className="text-[10px] font-mono text-neutral-500 bg-white/5 px-1.5 py-0.2 rounded-md">
+                  {count}
+                </span>
+              </button>
+            )
+          })}
         </div>
 
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => {
-              soundService.playClick()
-              setSelectedCategory(cat)
-            }}
-            className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-              selectedCategory === cat
-                ? 'bg-blue-600/20 text-blue-300 font-semibold'
-                : 'text-neutral-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
+        {/* Storage Bar Footer */}
+        <div className="pt-2 mt-2 border-t border-white/10 px-1 text-[11px]">
+          <div className="flex justify-between text-neutral-400">
+            <span>Installed Packages</span>
+            <span className="text-cyan-300 font-mono">{formatBytes(totalInstalledStorageBytes)}</span>
+          </div>
+        </div>
       </div>
 
-      {/* Main Catalog View */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Hero Banner: Nova Odyssey */}
-        <div className="relative rounded-2xl overflow-hidden p-6 bg-gradient-to-r from-violet-900 via-indigo-900 to-purple-950 border border-white/15 shadow-2xl flex items-center justify-between">
-          <div className="max-w-md space-y-2 z-10">
-            <span className="text-[11px] font-bold text-violet-300 tracking-wider uppercase bg-white/10 px-2 py-0.5 rounded-full">
-              FEATURED GAME
-            </span>
-            <h2 className="text-2xl font-extrabold text-white">Nova Odyssey</h2>
-            <p className="text-xs text-neutral-300 leading-relaxed">
-              Experience the fast-paced 60 FPS platformer built exclusively for NOVA OS. Jump across cyber orbitals and set the high score!
+      {/* Main Software Catalog Area */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs custom-scrollbar">
+        {/* Header Title */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-bold text-white mb-0.5 flex items-center gap-2">
+              <span>{activeCategory}</span>
+              <span className="text-xs font-normal text-neutral-400 font-mono">
+                ({filteredPackages.length} {filteredPackages.length === 1 ? 'package' : 'packages'})
+              </span>
+            </h3>
+            <p className="text-neutral-400 text-xs">
+              Explore officially verified desktop applications, compilers, creative suites, and productivity tools.
             </p>
-            <button
-              onClick={() => {
-                soundService.playClick()
-                openApp('games')
-              }}
-              className="mt-2 px-5 py-2 rounded-xl bg-white text-neutral-900 font-bold text-xs shadow-lg hover:bg-neutral-100 transition active:scale-95"
-            >
-              Play Now
-            </button>
-          </div>
-
-          <div className="hidden sm:flex w-24 h-24 rounded-2xl bg-gradient-to-tr from-violet-600 to-fuchsia-500 items-center justify-center shadow-2xl shadow-purple-500/40 transform rotate-3">
-            <Gamepad2 size={48} className="text-white" />
           </div>
         </div>
 
-        {/* Apps Grid */}
-        <div>
-          <h3 className="text-sm font-bold text-white mb-3">
-            {selectedCategory === 'All' ? 'Popular Applications' : `${selectedCategory} Apps`}
-          </h3>
+        {/* Package Grid */}
+        {filteredPackages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center p-12 text-center text-neutral-400">
+            <Info size={32} className="opacity-40 mb-2" />
+            <div className="font-semibold text-white">No software found</div>
+            <p className="text-xs text-neutral-500 mt-1 max-w-sm">
+              No applications match your selected filter or search query.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {filteredPackages.map((pkg) => {
+              const installed = isInstalled(pkg.id)
+              const installing = activeInstallations[pkg.id]
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filteredApps.map((app) => {
-              const IconComp = app.iconComponent
               return (
                 <div
-                  key={app.id}
-                  onClick={() => {
-                    soundService.playClick()
-                    setSelectedApp(app)
-                  }}
-                  className="p-3.5 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 hover:bg-white/10 transition cursor-pointer flex flex-col justify-between group"
+                  key={pkg.id}
+                  onClick={() => setSelectedPackage(pkg)}
+                  className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition cursor-pointer flex flex-col justify-between group shadow-sm backdrop-blur-md"
                 >
-                  <div className="flex items-start gap-3 mb-2">
-                    <div
-                      className={`w-12 h-12 rounded-xl ${app.iconBg} flex items-center justify-center shrink-0 shadow-md group-hover:scale-105 transition`}
-                    >
-                      <IconComp size={24} className={app.iconColor} />
-                    </div>
+                  <div>
+                    {/* Top row: Icon + Title + Version */}
+                    <div className="flex items-start gap-3">
+                      <div className={`w-12 h-12 rounded-xl ${pkg.iconBg} p-2 flex items-center justify-center shadow-md shrink-0 group-hover:scale-105 transition`}>
+                        <Sparkles size={22} className={pkg.iconColor} />
+                      </div>
 
-                    <div className="flex-1 truncate">
-                      <div className="font-semibold text-xs text-white truncate">{app.name}</div>
-                      <div className="text-[10px] text-neutral-400 truncate">{app.developer}</div>
-                      <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-400">
-                        <Star size={11} className="fill-amber-400" />
-                        <span className="font-mono">{app.rating}</span>
-                        <span className="text-neutral-500">({app.reviewsCount})</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-bold text-white text-xs truncate group-hover:text-blue-300 transition">
+                            {pkg.name}
+                          </h4>
+                          <span className="text-[10px] font-mono text-neutral-400 px-1.5 py-0.5 rounded bg-black/40">
+                            v{pkg.version}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-cyan-400 font-mono truncate">{pkg.developer}</div>
+                        <div className="text-[10px] text-neutral-400 mt-0.5">{pkg.category} &bull; {pkg.packageSize}</div>
                       </div>
                     </div>
+
+                    {/* Description */}
+                    <p className="text-[11px] text-neutral-300 mt-2.5 line-clamp-2 leading-relaxed">
+                      {pkg.description}
+                    </p>
                   </div>
 
-                  <p className="text-[11px] text-neutral-300 line-clamp-2 mb-3 leading-relaxed">
-                    {app.description}
-                  </p>
+                  {/* Bottom Row: Actions & Installation Status */}
+                  <div className="pt-3 mt-3 border-t border-white/5 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-1.5">
+                      {installed ? (
+                        <span className="flex items-center gap-1 text-[11px] font-mono text-emerald-400 font-medium">
+                          <Check size={13} /> Installed
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-mono text-neutral-400">Available</span>
+                      )}
+                    </div>
 
-                  <div className="flex justify-end">
-                    {app.isInstalled ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleLaunchApp(app)
-                        }}
-                        className="px-4 py-1 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[11px] transition shadow-sm"
-                      >
-                        OPEN
-                      </button>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleInstallApp(app)
-                        }}
-                        className="px-4 py-1 rounded-full bg-white/15 hover:bg-white/25 text-white font-semibold text-[11px] transition"
-                      >
-                        GET
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {installing ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-20 h-2 rounded-full bg-white/10 overflow-hidden">
+                            <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${installing.progress}%` }} />
+                          </div>
+                          <button
+                            onClick={() => cancelInstallation(pkg.id)}
+                            className="p-1 rounded-lg text-neutral-400 hover:text-white"
+                            title="Cancel Download"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ) : installed ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              soundService.playClick()
+                              openApp(pkg.appId)
+                            }}
+                            className="px-3 py-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-[11px] transition shadow-md shadow-blue-600/20"
+                          >
+                            Open
+                          </button>
+                          {!pkg.isSystemApp && (
+                            <button
+                              onClick={() => uninstallPackage(pkg.id)}
+                              className="p-1 rounded-lg text-neutral-400 hover:text-red-400 transition"
+                              title="Uninstall Software"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => installPackage(pkg.id)}
+                          className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-[11px] transition"
+                        >
+                          <Download size={13} />
+                          <span>Get</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
             })}
           </div>
-        </div>
+        )}
       </div>
+
+      {/* Application Details Modal */}
+      {selectedPackage && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-white/20 rounded-3xl p-6 max-w-xl w-full space-y-4 shadow-2xl max-h-[88vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className={`w-14 h-14 rounded-2xl ${selectedPackage.iconBg} p-2.5 flex items-center justify-center shadow-lg`}>
+                  <Sparkles size={28} className={selectedPackage.iconColor} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">{selectedPackage.name}</h3>
+                  <div className="text-xs text-cyan-400 font-mono">{selectedPackage.developer}</div>
+                  <div className="text-[11px] text-neutral-400">
+                    Version {selectedPackage.version} &bull; {selectedPackage.category}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedPackage(null)}
+                className="p-1.5 rounded-xl text-neutral-400 hover:text-white hover:bg-white/10"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Description */}
+            <div className="space-y-1">
+              <h4 className="text-xs font-semibold text-neutral-300">About this Application</h4>
+              <p className="text-xs text-neutral-300 leading-relaxed">{selectedPackage.description}</p>
+            </div>
+
+            {/* Technical Specifications & Permissions */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2.5 text-xs">
+              <div className="flex justify-between py-1 border-b border-white/5">
+                <span className="text-neutral-400">Installation Package Size</span>
+                <span className="text-white font-mono">{selectedPackage.packageSize}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-white/5">
+                <span className="text-neutral-400">System Compatibility</span>
+                <span className="text-white">{selectedPackage.compatibility}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-white/5">
+                <span className="text-neutral-400">Package Verification Integrity</span>
+                <span className="text-cyan-300 font-mono text-[10px] truncate max-w-[200px]">
+                  {selectedPackage.integrity}
+                </span>
+              </div>
+              <div className="py-1">
+                <span className="text-neutral-400 block mb-1.5 font-medium">Declared Sandbox Permissions:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedPackage.permissions.map((perm) => (
+                    <span
+                      key={perm}
+                      className="px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-500/25 text-[10px] font-mono"
+                    >
+                      {perm}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Actions Bar */}
+            <div className="flex justify-between items-center pt-2 border-t border-white/10">
+              <button
+                onClick={() => setSelectedPackage(null)}
+                className="px-3.5 py-1.5 rounded-xl text-xs text-neutral-400 hover:text-white hover:bg-white/10"
+              >
+                Close
+              </button>
+
+              <div className="flex items-center gap-2">
+                {isInstalled(selectedPackage.id) ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        soundService.playClick()
+                        openApp(selectedPackage.appId)
+                        setSelectedPackage(null)
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md shadow-blue-600/20"
+                    >
+                      <Play size={14} />
+                      <span>Launch App</span>
+                    </button>
+                    {!selectedPackage.isSystemApp && (
+                      <button
+                        onClick={() => {
+                          uninstallPackage(selectedPackage.id)
+                          setSelectedPackage(null)
+                        }}
+                        className="px-3 py-2 rounded-xl bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white text-xs font-medium transition"
+                      >
+                        Uninstall
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <button
+                    onClick={() => {
+                      installPackage(selectedPackage.id)
+                      setSelectedPackage(null)
+                    }}
+                    className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md shadow-blue-600/20"
+                  >
+                    <Download size={14} />
+                    <span>Install Application</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

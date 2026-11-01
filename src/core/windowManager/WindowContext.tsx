@@ -1,10 +1,19 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
-import type { WindowState, WindowManagerContextType, WindowBounds, SnapPosition } from './types'
+import type { WindowState, WindowManagerContextType, WindowBounds, SnapPosition, WorkspaceDef } from './types'
 import type { AppId } from '@/types'
 import { APPS_REGISTRY } from '@/core/appRegistry/apps.config'
 import { soundService } from '@/core/audio/soundService'
 import { useSettings } from '@/core/settings/SettingsContext'
 import { verifyPin } from '@/core/security/cryptoPin'
+
+const WORKSPACES_STORAGE_KEY = 'nova_workspaces_v2'
+
+export const DEFAULT_WORKSPACES: WorkspaceDef[] = [
+  { id: 1, name: 'Main' },
+  { id: 2, name: 'Work' },
+  { id: 3, name: 'Gaming' },
+  { id: 4, name: 'Entertainment' },
+]
 
 const WindowManagerContext = createContext<WindowManagerContextType | null>(null)
 
@@ -15,6 +24,31 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
   const [topZIndex, setTopZIndex] = useState(10)
 
   // Workspaces & Multitasking State
+  const [workspaces, setWorkspaces] = useState<WorkspaceDef[]>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem(WORKSPACES_STORAGE_KEY)
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        }
+      }
+    } catch {
+      // Ignore
+    }
+    return DEFAULT_WORKSPACES
+  })
+
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(workspaces))
+      }
+    } catch {
+      // Ignore
+    }
+  }, [workspaces])
+
   const [activeWorkspace, setActiveWorkspace] = useState<number>(settings.activeWorkspace || 1)
   const [isOverviewOpen, setIsOverviewOpen] = useState(false)
   const [isLauncherOpen, setIsLauncherOpen] = useState(false)
@@ -41,12 +75,11 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Switch Workspace
   const switchWorkspace = useCallback((workspaceId: number) => {
-    const target = Math.max(1, Math.min(4, workspaceId))
     soundService.playClick()
-    setActiveWorkspace(target)
+    setActiveWorkspace(workspaceId)
     // Focus highest z-index window in the target workspace
     setWindows((prev) => {
-      const inWorkspace = prev.filter((w) => w.workspaceId === target && !w.isMinimized)
+      const inWorkspace = prev.filter((w) => w.workspaceId === workspaceId && !w.isMinimized)
       if (inWorkspace.length > 0) {
         const sorted = [...inWorkspace].sort((a, b) => b.zIndex - a.zIndex)
         setActiveWindowId(sorted[0].id)
@@ -54,6 +87,67 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
       } else {
         setActiveWindowId(null)
         return prev.map((w) => ({ ...w, isFocused: false }))
+      }
+    })
+  }, [])
+
+  // Create Workspace
+  const createWorkspace = useCallback((name?: string) => {
+    soundService.playClick()
+    let nextId = 1
+    setWorkspaces((prev) => {
+      const maxId = prev.reduce((acc, curr) => Math.max(acc, curr.id), 0)
+      nextId = maxId + 1
+      const newWs: WorkspaceDef = {
+        id: nextId,
+        name: name?.trim() || `Workspace ${nextId}`,
+      }
+      return [...prev, newWs]
+    })
+    return nextId
+  }, [])
+
+  // Rename Workspace
+  const renameWorkspace = useCallback((id: number, name: string) => {
+    if (!name.trim()) return
+    soundService.playClick()
+    setWorkspaces((prev) =>
+      prev.map((ws) => (ws.id === id ? { ...ws, name: name.trim() } : ws))
+    )
+  }, [])
+
+  // Delete Workspace
+  const deleteWorkspace = useCallback((id: number) => {
+    soundService.playTrashEmpty()
+    setWorkspaces((prev) => {
+      if (prev.length <= 1) return prev // Always retain at least one workspace
+      return prev.filter((ws) => ws.id !== id)
+    })
+    // Relocate any windows in deleted workspace to workspace 1
+    setWindows((prev) =>
+      prev.map((w) => (w.workspaceId === id ? { ...w, workspaceId: 1 } : w))
+    )
+    setActiveWorkspace((curr) => (curr === id ? 1 : curr))
+  }, [])
+
+  // Reorder Workspaces
+  const reorderWorkspaces = useCallback((order: WorkspaceDef[] | number[]) => {
+    setWorkspaces((prev) => {
+      if (!order || order.length === 0) return prev
+      if (typeof order[0] === 'number') {
+        const idList = order as number[]
+        const map = new Map(prev.map((w) => [w.id, w]))
+        const reordered: WorkspaceDef[] = []
+        idList.forEach((id) => {
+          const item = map.get(id)
+          if (item) reordered.push(item)
+        })
+        prev.forEach((w) => {
+          if (!reordered.find((r) => r.id === w.id)) reordered.push(w)
+        })
+        return reordered
+      } else {
+        return order as WorkspaceDef[]
       }
     })
   }, [])
@@ -462,9 +556,14 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
         closeActiveWindow,
         minimizeActiveWindow,
         toggleMaximizeActiveWindow,
+        workspaces,
         activeWorkspace,
         switchWorkspace,
         moveWindowToWorkspace,
+        createWorkspace,
+        renameWorkspace,
+        deleteWorkspace,
+        reorderWorkspaces,
         isOverviewOpen,
         toggleOverview,
         isLauncherOpen,

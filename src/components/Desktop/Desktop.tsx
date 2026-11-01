@@ -16,7 +16,7 @@ import { Spotlight } from '@/components/Spotlight/Spotlight'
 import { AppSwitcher } from '@/components/WindowManager/AppSwitcher'
 import { BootScreen } from '@/components/Boot/BootScreen'
 import { LockScreen } from '@/components/LockScreen/LockScreen'
-import { MissionControl } from '@/components/WindowManager/MissionControl'
+import { ActivitiesOverview } from '@/components/WindowManager/ActivitiesOverview'
 import { AppLauncher } from '@/components/Launcher/AppLauncher'
 import { soundService } from '@/core/audio/soundService'
 import { Power, Moon, MousePointer2 } from 'lucide-react'
@@ -592,7 +592,7 @@ export const Desktop: React.FC = () => {
       <AppSwitcher />
 
       {/* Mission Control Multitasking Overview */}
-      <MissionControl />
+      <ActivitiesOverview />
 
       {/* Fullscreen Application Launcher */}
       <AppLauncher />

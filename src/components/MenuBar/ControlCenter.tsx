@@ -264,8 +264,8 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({ isOpen, onClose })
         </span>
       </button>
 
-      {/* Quick Lock & Sleep Action Row */}
-      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/10">
+      {/* Quick Lock, Sleep & Capture Action Row */}
+      <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-white/10">
         <button
           onClick={() => {
             soundService.playClick()
@@ -275,21 +275,34 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({ isOpen, onClose })
           className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition"
           title="Lock Screen (Ctrl+Alt+L)"
         >
-          <Lock size={13} className="text-cyan-400" />
-          <span className="font-medium text-[11px]">Lock Screen</span>
+          <Lock size={12} className="text-cyan-400" />
+          <span className="font-medium text-[10px]">Lock</span>
         </button>
 
         <button
           onClick={() => {
             soundService.playClick()
             onClose()
-            sleepSystem()
+            openApp('screenrecorder')
           }}
           className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition"
-          title="Enter Virtual Sleep"
+          title="Record Screen"
         >
-          <Moon size={13} className="text-purple-400" />
-          <span className="font-medium text-[11px]">Sleep</span>
+          <Zap size={12} className="text-red-400" />
+          <span className="font-medium text-[10px]">Record</span>
+        </button>
+
+        <button
+          onClick={() => {
+            soundService.playClick()
+            onClose()
+            openApp('screenshot')
+          }}
+          className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition"
+          title="Screenshot Tool"
+        >
+          <Monitor size={12} className="text-emerald-400" />
+          <span className="font-medium text-[10px]">Capture</span>
         </button>
       </div>
 

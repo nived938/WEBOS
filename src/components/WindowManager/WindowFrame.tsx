@@ -88,13 +88,16 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ windowState }) => {
     const dx = e.clientX - dragStartRef.current.startX
     const dy = e.clientY - dragStartRef.current.startY
 
-    const nextX = dragStartRef.current.winX + dx
-    const nextY = Math.max(30, dragStartRef.current.winY + dy) // Don't go above top menu bar
+    const screenW = window.innerWidth
+    const screenH = window.innerHeight
+    const dockIsLeft = settings.dockSettings?.position === 'left'
+    const minLeft = dockIsLeft ? 64 : 10
+    const clampedX = Math.max(minLeft, Math.min(screenW - 100, dragStartRef.current.winX + dx))
+    const clampedY = Math.max(32, Math.min(screenH - 60, dragStartRef.current.winY + dy))
 
-    updateWindowBounds(windowState.id, { x: nextX, y: nextY })
+    updateWindowBounds(windowState.id, { x: clampedX, y: clampedY })
 
     // Edge snap detection
-    const screenW = window.innerWidth
     if (e.clientX < 20) {
       setSnapPreview('left')
     } else if (e.clientX > screenW - 20) {

@@ -64,6 +64,16 @@ class SoundService {
     })
   }
 
+  // Generic sound dispatcher
+  public play(sound: string = 'buttonClick') {
+    if (this.muted) return
+    if (sound === 'notification') {
+      this.playNotification()
+    } else {
+      this.playClick()
+    }
+  }
+
   // Subtle pleasant click for buttons / tabs
   public playClick() {
     if (this.muted) return

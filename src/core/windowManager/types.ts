@@ -29,6 +29,11 @@ export interface WindowState {
   initialArgs?: Record<string, unknown>
 }
 
+export interface WorkspaceDef {
+  id: number
+  name: string
+}
+
 export interface WindowManagerContextType {
   windows: WindowState[]
   activeWindow: WindowState | null
@@ -45,9 +50,14 @@ export interface WindowManagerContextType {
   minimizeActiveWindow: () => void
   toggleMaximizeActiveWindow: () => void
   // Virtual Desktops & Workspaces
+  workspaces: WorkspaceDef[]
   activeWorkspace: number
   switchWorkspace: (workspaceId: number) => void
   moveWindowToWorkspace: (windowId: string, workspaceId: number) => void
+  createWorkspace: (name: string) => void
+  renameWorkspace: (id: number, name: string) => void
+  deleteWorkspace: (id: number) => void
+  reorderWorkspaces: (workspaces: WorkspaceDef[] | number[]) => void
   // Mission Control & Multitasking Overview
   isOverviewOpen: boolean
   toggleOverview: (open?: boolean) => void

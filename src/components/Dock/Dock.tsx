@@ -21,21 +21,23 @@ import {
   Gamepad2,
   Trash2,
   LayoutGrid,
+  Pin,
+  X,
+  ExternalLink,
 } from 'lucide-react'
 
 const DOCK_APP_IDS: AppId[] = [
-  'finder',
   'applibrary',
+  'finder',
   'browser',
-  'mail',
-  'calendar',
+  'appstore',
+  'terminal',
+  'codestudio',
   'notes',
   'calculator',
   'photos',
   'music',
-  'terminal',
   'settings',
-  'appstore',
   'games',
 ]
 
@@ -63,7 +65,7 @@ export const Dock: React.FC = () => {
   const { getTrashNodes, emptyTrash } = useFileSystem()
 
   const dockCfg = settings.dockSettings || {
-    position: 'bottom',
+    position: 'left',
     appearance: 'liquid-glass',
     iconSize: 48,
     iconSpacing: 6,
@@ -79,8 +81,6 @@ export const Dock: React.FC = () => {
   }
 
   const [hoveredAppId, setHoveredAppId] = useState<AppId | null>(null)
-  const [mouseX, setMouseX] = useState<number | null>(null)
-  const [mouseY, setMouseY] = useState<number | null>(null)
   const [isDockHovered, setIsDockHovered] = useState(false)
   const [draggedAppId, setDraggedAppId] = useState<AppId | null>(null)
 
@@ -104,38 +104,51 @@ export const Dock: React.FC = () => {
     e.stopPropagation()
     soundService.playClick()
 
-    const openWin = windows.find((w) => w.appId === appId)
+    const openWins = windows.filter((w) => w.appId === appId)
     const appDef = APPS_REGISTRY[appId]
+    const currentList = dockCfg.pinnedAppIds || DOCK_APP_IDS
+    const isPinned = currentList.includes(appId)
+
     const items: MenuItem[] = []
 
-    if (openWin) {
+    if (openWins.length > 0) {
       items.push({
-        label: `Bring to Front`,
-        action: () => focusWindow(openWin.id),
+        label: `Bring to Front (${openWins.length})`,
+        action: () => focusWindow(openWins[0].id),
       })
-      if (!openWin.isMinimized) {
-        items.push({
-          label: 'Minimize',
-          action: () => minimizeWindow(openWin.id),
-        })
-      } else {
-        items.push({
-          label: 'Restore',
-          action: () => focusWindow(openWin.id),
-        })
-      }
-      items.push({ divider: true, label: '', action: () => {} })
       items.push({
-        label: `Quit ${appDef?.title || 'App'}`,
+        label: 'Open New Window',
+        action: () => openApp(appId),
+      })
+      items.push({
+        label: 'Close All Windows',
         danger: true,
-        action: () => closeWindow(openWin.id),
+        action: () => openWins.forEach((w) => closeWindow(w.id)),
       })
     } else {
       items.push({
-        label: `Open ${appDef?.title || 'App'}`,
+        label: `Open ${appDef?.title || appId}`,
         action: () => openApp(appId),
       })
     }
+
+    items.push({ divider: true, label: '', action: () => {} })
+
+    // Pin / Unpin toggle
+    items.push({
+      label: isPinned ? 'Unpin from Dock' : 'Pin to Dock',
+      action: () => {
+        const nextPinned = isPinned
+          ? currentList.filter((id) => id !== appId)
+          : [...currentList, appId]
+        updateSettings({
+          dockSettings: {
+            ...dockCfg,
+            pinnedAppIds: nextPinned,
+          },
+        })
+      },
+    })
 
     setContextMenu({
       visible: true,
@@ -175,40 +188,26 @@ export const Dock: React.FC = () => {
     })
   }
 
-  // Base icon size depending on settings
-  const baseSize = dockCfg.iconSize || (settings.dockSize === 'small' ? 42 : settings.dockSize === 'large' ? 56 : 48)
+  const baseSize = dockCfg.iconSize || 48
   const isVertical = dockCfg.position === 'left' || dockCfg.position === 'right'
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!settings.dockMagnification && !dockCfg.magnification) return
-    setMouseX(e.clientX)
-    setMouseY(e.clientY)
-  }
-
-  const handleMouseLeave = () => {
-    setMouseX(null)
-    setMouseY(null)
-    setHoveredAppId(null)
-    setIsDockHovered(false)
-  }
 
   const handleAppClick = (appId: AppId) => {
     soundService.playClick()
-    const existingWin = windows.find((w) => w.appId === appId)
-    if (existingWin) {
-      if (existingWin.isMinimized) {
-        focusWindow(existingWin.id)
-      } else if (existingWin.isFocused) {
-        minimizeWindow(existingWin.id)
+    const existingWins = windows.filter((w) => w.appId === appId)
+    if (existingWins.length > 0) {
+      const win = existingWins[0]
+      if (win.isMinimized) {
+        focusWindow(win.id)
+      } else if (win.isFocused) {
+        minimizeWindow(win.id)
       } else {
-        focusWindow(existingWin.id)
+        focusWindow(win.id)
       }
     } else {
       openApp(appId)
     }
   }
 
-  // Drag and drop reordering of pinned apps
   const handleDragStart = (appId: AppId) => {
     setDraggedAppId(appId)
   }
@@ -233,43 +232,31 @@ export const Dock: React.FC = () => {
     }
   }
 
-  // Resolve dock appearance classes & styles
-  let dockAppearanceClass = 'bg-neutral-900/60 dark:bg-black/50 backdrop-blur-3xl border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)]'
-  let dockInlineStyle: React.CSSProperties = {}
-
-  if (dockCfg.appearance === 'liquid-glass') {
-    dockInlineStyle = {
-      backdropFilter: 'var(--glass-backdrop-filter, blur(28px) saturate(140%))',
-      WebkitBackdropFilter: 'var(--glass-backdrop-filter, blur(28px) saturate(140%))',
-      background: 'var(--glass-bg, rgba(16, 18, 28, 0.65))',
-      border: 'var(--glass-border, 1px solid rgba(255, 255, 255, 0.18))',
-      boxShadow: 'var(--glass-shadow, 0 20px 50px rgba(0, 0, 0, 0.5))',
-      borderRadius: 'var(--glass-radius, 24px)',
-    }
-  } else if (dockCfg.appearance === 'transparent') {
-    dockAppearanceClass = 'bg-transparent border-transparent shadow-none backdrop-blur-none'
-  } else if (dockCfg.appearance === 'frosted') {
-    dockAppearanceClass = 'bg-white/10 dark:bg-black/30 backdrop-blur-3xl border border-white/25 shadow-2xl rounded-3xl'
-  } else if (dockCfg.appearance === 'solid') {
-    dockAppearanceClass = 'bg-neutral-900 border border-neutral-700 shadow-2xl rounded-2xl backdrop-blur-none'
-  } else if (dockCfg.appearance === 'minimal') {
-    dockAppearanceClass = 'bg-black/30 border border-white/10 rounded-xl shadow-md backdrop-blur-md'
-  }
-
   // Wrapper positioning
   let wrapperPositionClass = 'fixed bottom-2 inset-x-0 flex justify-center z-40'
   let autoHideTransformClass = 'translate-y-0'
   if (dockCfg.position === 'left') {
     wrapperPositionClass = 'fixed left-2 inset-y-0 flex items-center z-40'
-    autoHideTransformClass = dockCfg.autoHide && !isDockHovered ? '-translate-x-24' : 'translate-x-0'
+    autoHideTransformClass =
+      dockCfg.autoHide && !isDockHovered ? '-translate-x-24' : 'translate-x-0'
   } else if (dockCfg.position === 'right') {
     wrapperPositionClass = 'fixed right-2 inset-y-0 flex items-center z-40'
-    autoHideTransformClass = dockCfg.autoHide && !isDockHovered ? 'translate-x-24' : 'translate-x-0'
+    autoHideTransformClass =
+      dockCfg.autoHide && !isDockHovered ? 'translate-x-24' : 'translate-x-0'
   } else {
-    autoHideTransformClass = (settings.dockAutoHide || dockCfg.autoHide) && !isDockHovered ? 'translate-y-24' : 'translate-y-0'
+    autoHideTransformClass =
+      (settings.dockAutoHide || dockCfg.autoHide) && !isDockHovered
+        ? 'translate-y-24'
+        : 'translate-y-0'
   }
 
-  const appsList = dockCfg.pinnedAppIds && dockCfg.pinnedAppIds.length > 0 ? dockCfg.pinnedAppIds : DOCK_APP_IDS
+  const appsList =
+    dockCfg.pinnedAppIds && dockCfg.pinnedAppIds.length > 0
+      ? dockCfg.pinnedAppIds
+      : DOCK_APP_IDS
+
+  // Find open windows for hovered app for window preview
+  const hoveredWindows = hoveredAppId ? windows.filter((w) => w.appId === hoveredAppId) : []
 
   return (
     <div
@@ -278,22 +265,29 @@ export const Dock: React.FC = () => {
     >
       <div
         ref={dockRef}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
+        onMouseLeave={() => {
+          setHoveredAppId(null)
+          setIsDockHovered(false)
+        }}
         style={{
-          ...dockInlineStyle,
+          backdropFilter: 'blur(28px) saturate(140%)',
+          WebkitBackdropFilter: 'blur(28px) saturate(140%)',
+          background: 'rgba(16, 18, 28, 0.75)',
+          border: '1px solid rgba(255, 255, 255, 0.18)',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+          borderRadius: '24px',
           gap: `${dockCfg.iconSpacing || 6}px`,
         }}
         className={`pointer-events-auto flex ${
           isVertical ? 'flex-col items-center px-2 py-3' : 'items-end px-3 py-2'
-        } ${dockAppearanceClass} transition-all duration-150`}
+        } transition-all duration-150`}
       >
         {/* Render Apps List */}
         {appsList.map((appId) => {
           const appDef = APPS_REGISTRY[appId]
           const isRunning = runningAppIds.includes(appId)
-          const isOpenWin = windows.find((w) => w.appId === appId)
-          const isFocused = isOpenWin?.isFocused
+          const openWins = windows.filter((w) => w.appId === appId)
+          const isFocused = openWins.some((w) => w.isFocused)
           const IconComp = APP_ICONS[appId] || Folder
 
           return (
@@ -307,18 +301,59 @@ export const Dock: React.FC = () => {
               onMouseEnter={() => setHoveredAppId(appId)}
               className="relative flex flex-col items-center group cursor-pointer"
             >
-              {/* Tooltip */}
-              {hoveredAppId === appId && !dockCfg.showLabels && (
+              {/* Hover Window Previews or Tooltip */}
+              {hoveredAppId === appId && (
                 <div
                   className={`absolute ${
                     isVertical
                       ? dockCfg.position === 'left'
-                        ? 'left-full ml-2'
-                        : 'right-full mr-2'
-                      : '-top-9'
-                  } px-2.5 py-1 rounded-lg bg-neutral-900/90 text-white text-[11px] font-medium border border-white/10 shadow-lg whitespace-nowrap animate-in fade-in zoom-in-95 duration-100 pointer-events-none z-50`}
+                        ? 'left-full ml-3'
+                        : 'right-full mr-3'
+                      : '-top-32'
+                  } z-50 pointer-events-auto`}
                 >
-                  {appDef?.title || appId}
+                  {openWins.length > 0 ? (
+                    /* Running Window Thumbnail Previews on Hover */
+                    <div className="bg-neutral-900/95 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl p-3 flex flex-col gap-2 min-w-[200px] animate-in fade-in zoom-in-95 duration-100">
+                      <div className="flex items-center justify-between text-xs font-semibold text-white pb-1 border-b border-white/10">
+                        <span>{appDef?.title || appId}</span>
+                        <span className="text-[10px] text-neutral-400 font-mono">
+                          {openWins.length} window{openWins.length > 1 ? 's' : ''}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {openWins.map((win) => (
+                          <div
+                            key={win.id}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              focusWindow(win.id)
+                            }}
+                            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer border border-white/5 flex items-center justify-between text-xs transition-colors"
+                          >
+                            <span className="truncate max-w-[140px] text-neutral-200">
+                              {win.title}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                closeWindow(win.id)
+                              }}
+                              className="text-neutral-500 hover:text-red-400 p-0.5"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Simple Name Tooltip */
+                    <div className="px-2.5 py-1 rounded-lg bg-neutral-900/90 text-white text-[11px] font-medium border border-white/10 shadow-lg whitespace-nowrap">
+                      {appDef?.title || appId}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -337,20 +372,13 @@ export const Dock: React.FC = () => {
                 <IconComp size={baseSize * 0.52} className="text-white drop-shadow-sm" />
               </div>
 
-              {/* Application Label */}
-              {dockCfg.showLabels && (
-                <span className="text-[10px] text-white/90 font-medium truncate max-w-[60px] text-center mt-0.5">
-                  {appDef?.title || appId}
-                </span>
-              )}
-
-              {/* Running dot indicator */}
+              {/* Running dot/line indicator */}
               {dockCfg.showRunningIndicators && (
                 <div className="h-1.5 flex items-center justify-center mt-1">
                   {isRunning && (
                     <span
-                      className={`w-1 h-1 rounded-full ${
-                        isFocused ? 'bg-white shadow-[0_0_6px_#fff]' : 'bg-white/50'
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isFocused ? 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]' : 'bg-white/60'
                       }`}
                     />
                   )}
@@ -379,8 +407,8 @@ export const Dock: React.FC = () => {
               className={`absolute ${
                 isVertical
                   ? dockCfg.position === 'left'
-                    ? 'left-full ml-2'
-                    : 'right-full mr-2'
+                    ? 'left-full ml-3'
+                    : 'right-full mr-3'
                   : '-top-9'
               } px-2.5 py-1 rounded-lg bg-neutral-900/90 text-white text-[11px] font-medium border border-white/10 shadow-lg whitespace-nowrap animate-in fade-in zoom-in-95 duration-100 pointer-events-none z-50`}
             >
@@ -403,16 +431,10 @@ export const Dock: React.FC = () => {
             />
           </div>
 
-          {dockCfg.showLabels && (
-            <span className="text-[10px] text-white/90 font-medium truncate max-w-[60px] text-center mt-0.5">
-              Trash
-            </span>
-          )}
-
           {dockCfg.showRunningIndicators && (
             <div className="h-1.5 flex items-center justify-center mt-1">
               {runningAppIds.includes('trash') && (
-                <span className="w-1 h-1 rounded-full bg-white/50" />
+                <span className="w-1.5 h-1.5 rounded-full bg-white/60" />
               )}
             </div>
           )}

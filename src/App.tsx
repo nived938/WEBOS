@@ -2,20 +2,20 @@ import React, { useEffect, useState } from 'react'
 import { SettingsProvider } from '@/core/settings/SettingsContext'
 import { FileSystemProvider } from '@/core/filesystem/FileSystemContext'
 import { NotificationProvider } from '@/core/notifications/NotificationContext'
+import { AppInstallationProvider } from '@/core/appStore/AppInstallationContext'
 import { WindowManagerProvider, useWindowManager } from '@/core/windowManager/WindowContext'
 import { PointerLockProvider } from '@/core/pointer/PointerLockContext'
 import { Desktop } from '@/components/Desktop/Desktop'
-import { soundService } from '@/core/audio/soundService'
 
 const AppContent: React.FC = () => {
-  const { openApp, windows } = useWindowManager()
+  const { openApp } = useWindowManager()
   const [hasBooted, setHasBooted] = useState(false)
 
   // Bootup sequence
   useEffect(() => {
     if (!hasBooted) {
       setHasBooted(true)
-      // Open Finder and Notes on initial visit
+      // Open Notes on initial visit
       setTimeout(() => {
         openApp('notes')
       }, 300)
@@ -30,11 +30,13 @@ export function App() {
     <SettingsProvider>
       <FileSystemProvider>
         <NotificationProvider>
-          <PointerLockProvider>
-            <WindowManagerProvider>
-              <AppContent />
-            </WindowManagerProvider>
-          </PointerLockProvider>
+          <AppInstallationProvider>
+            <PointerLockProvider>
+              <WindowManagerProvider>
+                <AppContent />
+              </WindowManagerProvider>
+            </PointerLockProvider>
+          </AppInstallationProvider>
         </NotificationProvider>
       </FileSystemProvider>
     </SettingsProvider>
